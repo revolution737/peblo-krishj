@@ -1,0 +1,11 @@
+{
+  "name": "peblo-tv-mini",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "dev:cms": "npm --prefix cms run dev -- --port 5173",
+    "dev:viewer": "npm --prefix viewer run dev -- --port 5174",
+    "dev": "npm --prefix cms run dev -- --port 5173",
+    "build": "npm --prefix cms run build && npm --prefix viewer run build"
+  }
+}

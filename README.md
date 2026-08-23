@@ -56,7 +56,7 @@ npm run dev
 **How publishing is made atomic (and handling mid-publish failures)**
 To ensure viewers never read a half-written catalogue, the publishing job writes the generated JSON to a unique temporary file on disk (e.g., `catalogue_{run_id}.json.tmp`). Once the entire write operation completes and is flushed to the OS, we copy it to a historical backup and then perform an atomic filesystem operation (`os.replace` in Python) to swap the temporary file over the live `catalogue.json`.
 **If the process dies mid-publish:** The temporary file is simply abandoned. The live `catalogue.json` remains completely untouched, meaning viewers experience zero downtime or corrupted data.
-
+**Handling slow images:** To ensure the Viewer UI remains pleasant on slow network connections, I implemented a CSS-based Skeleton Loading Animation. By applying a pulsating light grey background and enforcing explicit aspect ratios on the image containers, the UI immediately renders a perfect grid of skeleton placeholders. This prevents layout shifting and avoids displaying ugly broken image icons or raw alt-text before the images finish downloading.
 **Storage Abstraction (Moving to Cloudflare R2)**
 I implemented a `StorageBackend` abstract base class to decouple file I/O operations from the business logic. Currently, it uses a `LocalStorageBackend`. 
 To migrate to Cloudflare R2 (which provides an S3-compatible API), the only necessary change is creating an `S3StorageBackend` class that implements `save_file(path, bytes)` and `get_file(path)` using the `boto3` library. The system can then inject this new class at runtime when a `STORAGE_BACKEND=s3` environment variable is detected. No route handlers or publish jobs would need to change.
@@ -66,6 +66,7 @@ To migrate to Cloudflare R2 (which provides an S3-compatible API), the only nece
 **How did you implement search and what are its scale limits?**
 Search is implemented directly in the React frontend (and a separate backend filter for the CMS). The frontend filters the `catalogue.json` payload in memory across `title`, `categories`, and `language`. 
 *Limitations:* This works flawlessly for small-to-medium catalogues (e.g., ~1,000 titles) because JSON parsing in modern browsers is incredibly fast. However, at around **10,000 to 50,000+ titles**, parsing large JSON payloads into memory will cause significant heap bloat and lag on low-end mobile devices. At that scale, search must be offloaded to a dedicated edge-cached backend search engine (like Typesense or Elasticsearch).
+
 
 **Pre-published Catalogue vs. Database Queries Per Request**
 *Why pre-publish?* The Viewer UI traffic pattern is heavily read-oriented and experiences massive spikes. Serving a static `catalogue.json` drastically reduces database load. A static file can be served via a CDN directly from the edge, achieving near-infinite scalability and sub-10ms response times with zero database queries.

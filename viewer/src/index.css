@@ -61,6 +61,8 @@ h1, h2, h3, h4, h5, h6, .brand, .hero-title, .row-title {
   position: relative;
   height: 80vh;
   min-height: 600px;
+  background-color: #e0e0e0;
+  animation: skeletonLoading 1.5s infinite ease-in-out;
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
@@ -153,11 +155,21 @@ h1, h2, h3, h4, h5, h6, .brand, .hero-title, .row-title {
 
 .poster {
   width: 260px;
+  aspect-ratio: 2 / 3;
+  background-color: #e0e0e0;
+  animation: skeletonLoading 1.5s infinite ease-in-out;
+  color: transparent; /* Hide alt text while loading */
   border-radius: 24px;
   transition: transform 0.3s, box-shadow 0.3s;
   cursor: pointer;
   object-fit: cover;
   box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+}
+
+@keyframes skeletonLoading {
+  0% { background-color: #f0f0f0; }
+  50% { background-color: #e0e0e0; }
+  100% { background-color: #f0f0f0; }
 }
 .poster:hover {
   transform: scale(1.05) rotate(1deg);

@@ -97,6 +97,15 @@ const Dashboard: React.FC = () => {
     queryFn: fetchShowsData,
   });
 
+  const { data: validationReport } = useQuery({
+    queryKey: ['validationReportData'],
+    queryFn: async () => {
+      const res = await api.get('/admin/validation-report');
+      return res.data;
+    },
+  });
+  const hasBlockingIssues = validationReport?.summary?.total_blocking_issues > 0;
+
   const openShowDetails = async (show: Show) => {
     setSelectedShow(show);
     setLoadingDetails(true);
@@ -280,9 +289,21 @@ const Dashboard: React.FC = () => {
         <div className="flex gap-4 items-center">
           <button onClick={() => setIsCreateShowOpen(true)} className="btn btn-secondary"><Plus size={18} /> New Show</button>
           <button onClick={toggleHistory} className="btn btn-secondary"><Clock size={18} /> {isHistoryExpanded ? 'Close History' : 'Publish History'}</button>
-          <button onClick={handlePublish} disabled={publishMutation.isPending || role !== 'admin'} className="btn btn-primary">
-            <UploadCloud size={18} /> {publishMutation.isPending ? 'Publishing...' : 'Publish Live Catalog'}
-          </button>
+          <div style={{ position: 'relative' }}>
+            <button 
+              onClick={handlePublish} 
+              disabled={publishMutation.isPending || role !== 'admin' || hasBlockingIssues} 
+              className="btn btn-primary"
+              title={hasBlockingIssues ? "Cannot publish: Resolve blocking issues in the Validation Report first." : ""}
+            >
+              <UploadCloud size={18} /> {publishMutation.isPending ? 'Publishing...' : 'Publish Live Catalog'}
+            </button>
+            {hasBlockingIssues && (
+              <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: '0.25rem', color: '#ef4444', fontSize: '0.75rem', whiteSpace: 'nowrap' }}>
+                Blocked: Check Validation Report
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

@@ -51,6 +51,9 @@ npm run dev
 
 ### Part B: API & CMS Implementation
 **Decision:** Built a robust FastAPI backend and a React/Vite CMS with Role-Based Access Control (RBAC). I integrated inline-editing for titles and collapsible accordions for episodes/artwork to maximize editor efficiency and to demonstrate rollback testing. I also added a "Validation Report" endpoint to explicitly check for missing data (like artwork or missing sections) before allowing an Admin to publish.
+**Trade-offs:**
+- **Secrets Management:** JWT secrets and database passwords are still hardcoded in the `docker-compose.yml` and `.env` files for local development simplicity. In a real environment, these would be managed by a secrets manager like HashiCorp Vault.
+- **Frontend Dockerization:** The Dockerfiles for the CMS and Viewer run `npm run dev` instead of a production build served by Nginx. This prioritizes ease of development and evaluation over strict production deployment patterns.
 
 ### Part C: The Atomic Publish Pipeline
 **How publishing is made atomic (and handling mid-publish failures)**
@@ -63,6 +66,10 @@ To migrate to Cloudflare R2 (which provides an S3-compatible API), the only nece
 
 ### Part D: Viewer UI & Search
 **Decision:** A Netflix-style, high-performance UI reading exclusively from the static `catalogue.json`.
+**Trade-offs:**
+- **State Management:** I skipped using TanStack Query in the Viewer UI for simplicity, relying on standard React `useEffect` hooks instead.
+- **Pagination:** The Viewer UI currently lacks pagination or infinite scroll, relying purely on basic category/language filters. This is a known limitation that would need addressing before scaling.
+
 **How did you implement search and what are its scale limits?**
 Search is implemented directly in the React frontend (and a separate backend filter for the CMS). The frontend filters the `catalogue.json` payload in memory across `title`, `categories`, and `language`. 
 *Limitations:* This works flawlessly for small-to-medium catalogues (e.g., ~1,000 titles) because JSON parsing in modern browsers is incredibly fast. However, at around **10,000 to 50,000+ titles**, parsing large JSON payloads into memory will cause significant heap bloat and lag on low-end mobile devices. At that scale, search must be offloaded to a dedicated edge-cached backend search engine (like Typesense or Elasticsearch).
@@ -74,7 +81,9 @@ Search is implemented directly in the React frontend (and a separate backend fil
 
 ### Part E: Optional Stretch Goals & AI Usage
 **What was left out and why? AI usage?**
-Nothing was left out! I successfully implemented both optional stretch goals to make the platform highly robust:
+While I implemented the core requirements, I deliberately skipped productionizing the frontend Docker builds (they use `npm run dev`) and skipped TanStack Query/pagination in the Viewer UI to focus my time on the backend pipeline, robust CMS features, and atomic publishing logic.
+
+I successfully implemented both optional stretch goals to make the platform highly robust:
 1. **Versioned Catalogue & Rollbacks:** The system retains historical copies of `catalogue_{run_id}.json`. The CMS Dashboard provides a "Publish History" view, allowing Admins to instantaneously roll back the Viewer UI to any previous publish state via an atomic `os.replace` operation.
 2. **Audit Logs:** All mutating actions (Creates, Updates, Deletes, Uploads, Publishes, and Rollbacks) are logged to a dedicated `AuditLog` table using a `log_audit_event` backend helper. This is queryable via a real-time Audit Logs dashboard in the CMS.
 

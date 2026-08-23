@@ -1,7 +1,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
+from sqlalchemy import text
 import os
+
+from app.database import AsyncSessionLocal
 
 from app.config import settings
 from app.routers import auth, artwork, shows, seasons, episodes, admin, catalog
@@ -29,4 +33,9 @@ app.include_router(catalog.router)
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy"}
+    try:
+        async with AsyncSessionLocal() as session:
+            await session.execute(text("SELECT 1"))
+        return {"status": "healthy", "db": "connected"}
+    except Exception:
+        return JSONResponse(status_code=503, content={"status": "unhealthy", "db": "disconnected"})

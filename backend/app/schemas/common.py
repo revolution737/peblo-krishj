@@ -2,6 +2,9 @@ from pydantic import BaseModel
 from typing import List, Optional
 import uuid
 from datetime import datetime
+import json
+import os
+from pydantic import BaseModel, field_validator, ValidationInfo
 
 class ShowBase(BaseModel):
     title: str
@@ -10,6 +13,23 @@ class ShowBase(BaseModel):
     categories: List[str] = []
     synopsis: Optional[str] = None
     status: str
+
+    @field_validator('status')
+    @classmethod
+    def validate_status(cls, v: str) -> str:
+        if v not in ('draft', 'published'):
+            raise ValueError('Status must be draft or published')
+        return v
+
+    @field_validator('section')
+    @classmethod
+    def validate_section(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        allowed = {"featured", "series", "minisodes", "songs"}
+        if v not in allowed:
+            raise ValueError(f'Section must be one of {allowed}')
+        return v
 
 class ShowCreate(ShowBase):
     pass
@@ -50,6 +70,13 @@ class EpisodeBase(BaseModel):
     language: str
     content_group: str
     status: str
+
+    @field_validator('status')
+    @classmethod
+    def validate_status(cls, v: str) -> str:
+        if v not in ('draft', 'published'):
+            raise ValueError('Status must be draft or published')
+        return v
 
 class EpisodeCreate(EpisodeBase):
     show_id: uuid.UUID

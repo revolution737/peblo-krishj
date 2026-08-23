@@ -23,9 +23,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Lint and syntax check
+      - name: Run Tests
         run: |
-          python -m py_compile backend/app/main.py
+          cd backend
+          python -m pytest tests/
 
   frontend-checks:
     runs-on: ubuntu-latest

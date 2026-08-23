@@ -151,3 +151,12 @@ async def upload_artwork(
     # Or just return raw path and let frontend construct it. We will return raw path and frontend can construct it.
     
     return artwork_record
+
+@router.get("/episode/{episode_id}", response_model=list[ArtworkResponse])
+async def get_episode_artwork(
+    episode_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(require_editor)
+):
+    result = await db.execute(select(Artwork).where(Artwork.episode_id == episode_id))
+    return result.scalars().all()

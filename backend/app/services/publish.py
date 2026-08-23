@@ -112,6 +112,7 @@ async def publish_catalogue(db: AsyncSession, user_id: uuid.UUID) -> PublishRun:
             if sec_shows:
                 sections_list.append({
                     "id": sec_id,
+                    "name": sec_id.capitalize(),
                     "shows": sec_shows
                 })
                 

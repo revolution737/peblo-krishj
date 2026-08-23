@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from typing import List
+from typing import List, Optional
 import uuid
 
 from app.database import get_db
@@ -14,10 +14,24 @@ from app.services.audit import log_audit_event
 router = APIRouter(prefix="/admin/episodes", tags=["admin/episodes"])
 
 @router.get("/", response_model=List[EpisodeResponse])
-async def list_episodes(show_id: uuid.UUID = None, db: AsyncSession = Depends(get_db), user: dict = Depends(require_editor)):
+async def list_episodes(
+    skip: int = 0,
+    limit: int = 100,
+    show_id: Optional[uuid.UUID] = None,
+    status: Optional[str] = None,
+    language: Optional[str] = None,
+    db: AsyncSession = Depends(get_db), 
+    user: dict = Depends(require_editor)
+):
     stmt = select(Episode).order_by(Episode.episode_number)
     if show_id:
         stmt = stmt.where(Episode.show_id == show_id)
+    if status:
+        stmt = stmt.where(Episode.status == status)
+    if language:
+        stmt = stmt.where(Episode.language == language)
+        
+    stmt = stmt.offset(skip).limit(limit)
     result = await db.execute(stmt)
     return result.scalars().all()
 

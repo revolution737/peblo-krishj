@@ -7,7 +7,9 @@ const Home: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [language, setLanguage] = useState('');
+  const [category, setCategory] = useState('');
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [catDropdownOpen, setCatDropdownOpen] = useState(false);
   const [selectedShow, setSelectedShow] = useState<any>(null);
 
   const languageOptions = [
@@ -16,12 +18,22 @@ const Home: React.FC = () => {
     { code: 'hi', label: 'Hindi' }
   ];
 
+  const categoryOptions = [
+    { code: '', label: 'All Categories' },
+    { code: 'adventure', label: 'Adventure' },
+    { code: 'friendship', label: 'Friendship' },
+    { code: 'india', label: 'India' },
+    { code: 'learning', label: 'Learning' },
+    { code: 'music', label: 'Music' }
+  ];
+
   useEffect(() => {
     const fetchCatalog = async () => {
       try {
         const params = new URLSearchParams();
         if (search.trim()) params.append('q', search.trim());
         if (language) params.append('language', language);
+        if (category) params.append('category', category);
         
         const url = params.toString() ? `/catalog/search?${params.toString()}` : `/catalog`;
         const res = await api.get(url);
@@ -37,7 +49,7 @@ const Home: React.FC = () => {
       fetchCatalog();
     }, 250);
     return () => clearTimeout(timer);
-  }, [search, language]);
+  }, [search, language, category]);
 
   // Handle scroll for navbar styling
   const [scrolled, setScrolled] = useState(false);
@@ -47,12 +59,13 @@ const Home: React.FC = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const getArtwork = (show: any, type: string) => {
-    const seed = (show?.title || 'show').length;
+  const getArtwork = (item: any, type: string) => {
+    const artworkPath = item?.artwork?.[type];
+    if (artworkPath) return `http://localhost:8000${artworkPath}`;
+    const seed = (item?.title || 'show').length;
     if (type === 'banner') return `https://picsum.photos/seed/${seed}banner/1280/720`;
     if (type === 'poster') return `https://picsum.photos/seed/${seed}poster/600/900`;
-    if (type === 'thumbnail') return `https://picsum.photos/seed/${seed}thumb/640/360`;
-    return '';
+    return `https://picsum.photos/seed/${seed}thumb/640/360`;
   };
 
   if (loading && !catalog) {
@@ -84,7 +97,26 @@ const Home: React.FC = () => {
           <div className="custom-dropdown-container">
             <button 
               className="language-select"
-              onClick={() => setDropdownOpen(!dropdownOpen)}
+              onClick={() => { setCatDropdownOpen(!catDropdownOpen); setDropdownOpen(false); }}
+            >
+              {categoryOptions.find(o => o.code === category)?.label || 'All Categories'}
+            </button>
+            {catDropdownOpen && (
+              <div className="custom-dropdown-menu">
+                {categoryOptions.map(option => (
+                  <div key={option.code} className={`custom-dropdown-item ${category === option.code ? 'active' : ''}`}
+                    onClick={() => { setCategory(option.code); setCatDropdownOpen(false); }}
+                  >
+                    {option.label}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="custom-dropdown-container">
+            <button 
+              className="language-select"
+              onClick={() => { setDropdownOpen(!dropdownOpen); setCatDropdownOpen(false); }}
             >
               {languageOptions.find(o => o.code === language)?.label || 'All Languages'}
             </button>
@@ -139,7 +171,7 @@ const Home: React.FC = () => {
         ) : (
           sections.map((section: any, idx: number) => (
             <div key={idx} className="row">
-              <h2 className="row-title">{section.name || section.section || 'Featured'}</h2>
+              <h2 className="row-title">{section.name || section.section || section.id || 'Featured'}</h2>
               <div className="row-posters">
                 {(section.shows || []).map((show: any) => (
                   <img 
@@ -208,7 +240,7 @@ const Home: React.FC = () => {
                            {ep.episode_number}
                          </span>
                          <img 
-                           src={getArtwork(selectedShow, 'thumbnail')} 
+                           src={getArtwork(ep, 'thumbnail')} 
                            style={{ width: '140px', aspectRatio: '16/9', objectFit: 'cover', borderRadius: '12px' }} 
                            alt="Thumbnail" 
                          />

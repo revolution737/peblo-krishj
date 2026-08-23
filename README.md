@@ -1,119 +1,97 @@
-# Peblo TV Mini
+# Peblo TV Mini 📺
 
-> **Take-Home Challenge — Full-Stack Platform Engineer (Python/FastAPI + React)**  
-> CMS upload → PostgreSQL → Atomic Publish Job → Storage (`catalogue.json`) → Netflix-Style Viewer UI.
-
----
-
-## 1. System Architecture & Flow
-
-```text
-┌──────────────────────────┐
-│   Internal CMS (React)   │ ──► Upload Artworks / Edit Metadata / Audit Catalog
-└─────────────┬────────────┘
-              │ (JWT Bearer: Editor or Admin)
-              ▼
-┌──────────────────────────┐
-│   FastAPI Backend (API)  │ ──► PostgreSQL (Shows, Seasons, Episodes, Artworks, Users, PublishRuns)
-└─────────────┬────────────┘
-              │ (POST /admin/catalog/publish [Admin only])
-              ▼
-┌──────────────────────────┐
-│    Atomic Publish Job    │ ──► Language Collapsing + Validation + Atomic Write to Storage
-└─────────────┬────────────┘
-              │
-              ▼
-┌──────────────────────────┐
-│  catalogue.json (Storage)│
-└─────────────┬────────────┘
-              │
-              ▼
-┌──────────────────────────┐
-│   Viewer UI (React/TS)   │ ──► Reads GET /catalog & GET /catalog/search (Netflix Browse)
-└──────────────────────────┘
-```
+> **Take-Home Challenge — Full-Stack Platform Engineer**  
+> A miniature end-to-end streaming platform consisting of a React CMS, a Python/FastAPI backend, an atomic publishing pipeline, and a React-based Netflix-style Viewer UI.
 
 ---
 
-## 2. Strict Domain Rules & Implementation Details
+## 🚀 1. Quick Start: How to Run the Project
 
-| # | Domain Rule | Implementation Strategy |
-|---|---|---|
-| 1 | **Season 0 Exclusion** | `season_number == 0` is reserved exclusively for trailers. Filtered out from all viewer season lists (`.filter(s => s.season_number !== 0)`). |
-| 2 | **Content Group Collapsing** | Language variants share a `content_group` and are stored as distinct rows with unique constraint `(content_group, language)`. The publish job collapses them into a single entry with a `languages: string[]` array. |
-| 3 | **Seed Data Validation** | Seed data anomalies (unassigned sections, missing artwork, casing inconsistencies, duplicate groups) are caught and surfaced via `GET /admin/validation-report`. |
-| 4 | **Server-Side Artwork Validation** | `POST /admin/artwork/upload` uses Pillow to strictly enforce: **Poster** (2:3, ~600x900), **Banner** (16:9, ~1280x720), **Thumbnail** (16:9, ~640x360), Max **200 KB**. |
-| 5 | **Atomic Publish Job** | Writes JSON to a temporary file (`catalogue.json.tmp.<uuid>`), syncs to disk, and replaces live file via `os.replace()`. Completely atomic and idempotent. |
-| 6 | **Role-Based Access Control** | Enforced at route level with JWT dependencies (`require_editor` for CRUD/Audit, `require_admin` for `/admin/catalog/publish`). |
-| 7 | **CMS & Viewer Separation** | Viewer client interacts solely with read-only endpoints (`/catalog` and `/catalog/search`) without admin privileges or tokens. |
-| 8 | **Server-Side Search** | Search endpoint (`GET /catalog/search?q=...&language=...&category=...&section=...`) performs server-side filtering on the published catalog snapshot. |
-| 9 | **Viewer UI Styling (mypeblo.com Design)** | Viewer UI follows a Light mode theme utilizing the brand colors (Orange, Purple, Yellow) and typography ("Grandstander" & "Poppins") from mypeblo.com, while preserving Netflix-style horizontal row browsing and modal logic. |
-
----
-
-## 3. Seed Data Integrity Issues Surfaced
-
-The `GET /admin/validation-report` endpoint audits and surfaces deliberate data issues present in `seed_shows.json`:
-
-1. **Duplicate Content Group + Language:** `ep_9001` duplicates `ep_0004` (`motis-many-lives-s01e02`, Hindi). The seed script enforces unique constraints and skips duplicate ingestion.
-2. **Missing Section:** Shows such as *Rhyme Rangers* have `section: null`. Flagged as blocking issue since published shows require a valid section (`featured`, `series`, `minisodes`, `songs`).
-3. **Missing Artwork:** Episodes with empty artwork arrays are identified as blocking issues before publishing.
-4. **Draft Episodes:** Filtered out from live published outputs.
-5. **Inconsistent Title Casing:** Detected (e.g. ALL-CAPS titles) and reported under non-blocking data quality warnings.
-
----
-
-## 4. Quick Start & How to Run
+The system is designed to be brought up quickly using Docker Compose. The compose file provisions the PostgreSQL database, runs migrations, seeds the data, and boots the backend API.
 
 ### Prerequisites
-- Docker & Docker Compose
+- Docker & Docker Compose (`docker compose`)
 - Node.js 18+ & npm
 
-### Step 1: Start PostgreSQL & FastAPI Backend
+### Step 1: Start the Backend Pipeline
 ```bash
+# This brings up the Postgres DB and the FastAPI backend, and runs the seed script automatically.
 docker compose up -d --build
 ```
-- API Docs (Swagger): **http://localhost:8000/docs**
-- Health Check: **http://localhost:8000/health**
+- **API Docs (Swagger):** [http://localhost:8000/docs](http://localhost:8000/docs)
+- **Health Check:** [http://localhost:8000/health](http://localhost:8000/health)
 
-### Step 2: Seed Default Credentials
-The database automatically seeds on startup:
-- **Admin**: `admin@peblo.tv` / `admin123` (Full CRUD + Publish permission)
-- **Editor**: `editor@peblo.tv` / `editor123` (CRUD & Validation Audit)
+*Note: The database seeds automatically with two default users:*
+- **Admin**: `admin@peblo.tv` / `admin123` (Full CMS CRUD + Publish rights)
+- **Editor**: `editor@peblo.tv` / `editor123` (CMS CRUD only)
 
-### Step 3: Run the CMS Frontend
+### Step 2: Start the CMS Frontend
 ```bash
-npm run dev:cms
-# or: cd cms && npm run dev -- --port 5173
+cd cms
+npm ci
+npm run dev
 ```
-- CMS URL: **http://localhost:5173**
+- **CMS URL:** [http://localhost:5173](http://localhost:5173)
 
-### Step 4: Run the Viewer UI
+### Step 3: Start the Viewer UI
 ```bash
-npm run dev:viewer
-# or: cd viewer && npm run dev -- --port 5174
+cd viewer
+npm ci
+npm run dev
 ```
-- Viewer URL: **http://localhost:5174**
+- **Viewer URL:** [http://localhost:5174](http://localhost:5174)
 
 ---
 
-## 5. Architectural Trade-offs & Production Considerations
+## 🏛 2. Part E: Architectural Decisions & Written Responses
 
-### Search & Scale Trade-offs
-- **Current Approach:** `GET /catalog/search` loads the active `catalogue.json` snapshot from local storage and executes memory-efficient multi-field filtering.
-- **Production Scale Plan:** For catalogs exceeding 50,000+ titles, the search should be offloaded to **PostgreSQL Full-Text Search with `pg_trgm` indexes** or dedicated **Elasticsearch / Meilisearch / Typesense** clusters with edge CDN caching (Cloudflare KV / Workers) for sub-10ms global response times.
+### How publishing is made atomic (and handling mid-publish failures)
+To ensure viewers never read a half-written catalogue, the publishing job writes the generated JSON to a unique temporary file on disk (e.g., `catalogue.tmp.<uuid>.json`). Once the entire write operation completes and is flushed to the OS, we perform an atomic filesystem operation (`os.replace` in Python) to swap the temporary file over the live `catalogue.json`.
+**If the process dies mid-publish:** The temporary file is simply abandoned. The live `catalogue.json` remains completely untouched, meaning viewers experience zero downtime or corrupted data. 
 
-### Storage Abstraction
-- The `StorageBackend` abstract base class decouples file operations. The current implementation uses `LocalStorageBackend`. Swapping to **Cloudflare R2** or **AWS S3** requires only setting `STORAGE_BACKEND=s3` and providing bucket credentials without modifying any router logic.
+### Storage Abstraction (Moving to Cloudflare R2)
+I implemented a `StorageBackend` abstract base class to decouple file I/O operations from the business logic. Currently, it uses a `LocalStorageBackend`. 
+To migrate to Cloudflare R2 (which provides an S3-compatible API), the only necessary change is creating an `S3StorageBackend` class that implements `save_file(path, bytes)` and `get_file(path)` using the `boto3` library. The system can then inject this new class at runtime when a `STORAGE_BACKEND=s3` environment variable is detected. No route handlers or publish jobs would need to change.
+
+### Search Implementation & Scale Limits
+**Implementation:** Search is implemented in the FastAPI backend by loading the active `catalogue.json` snapshot into memory and applying Python-based filtering across `title`, `category`, `language`, and `section`. 
+**Limitations:** This works flawlessly for small-to-medium catalogues (e.g., ~1,000 titles) because JSON parsing and list comprehensions in Python are fast. However, at around **10,000 to 50,000+ titles**, parsing large JSON payloads into memory per request will cause high latency, memory bloat, and thread blocking.
+**Next Steps:** For a larger catalogue, I would shift search back to the database layer utilizing PostgreSQL's Full-Text Search with `pg_trgm` (trigram) indexes, or offload it entirely to a dedicated search engine like Typesense or Elasticsearch with edge CDN caching.
+
+### Pre-published Catalogue vs. Database Queries Per Request
+**Why pre-publish?** The Viewer UI traffic pattern is heavily read-oriented and can experience massive spikes (e.g., a new show drops). Serving a static `catalogue.json` drastically reduces database load. A static file can be served via a CDN (like Cloudflare) directly from the edge, achieving near-infinite scalability and sub-10ms response times without touching our PostgreSQL database.
+**Where it bites us:** It creates an eventual consistency hurdle. Editors must explicitly remember to hit "Publish", and there is a natural delay between saving a change in the CMS and a user seeing it on their TV. 
+
+### What was left out and why? AI usage?
+I chose to leave out the optional stretch goals (versioned catalogue with rollback, audit logs) because I prioritized a robust, bug-free core experience. Delivering a well-tested atomic publishing job, clear validation errors, and a responsive UI demonstrates better operability than a rushed feature-set.
+**AI Usage:** I used Antigravity with Gemini 3.7 Flash for coding and Claude Opus 4.6 for planning and understanding high level architecture required to build this project. I used AI to write the frontend as the requirements for both the viewer and the cms page were very clear and could easily be understood by an agent without creating time intensive styling and design documentation to feed the agent. While the frontend was entirely generated, I did make several manual refactors and styling changes to provide better usability for operators of the cms page as it is highly mission critical in the context of admins or editors using the page 50 times a week, making clarity and robustness the obvious decision. I use AI in a very low trust fashion constantly monitoring for errors and potential diversion from the goals of security, correctness of output and performance.
 
 ---
 
-## 6. Time Spent Breakdown
+## 🕵️ 3. Handling the "Imperfect" Seed Data
 
-- **Backend Scaffolding & DB Models:** ~1.5 hours
-- **Storage Abstraction & Pillow Artwork Validation:** ~1 hour
-- **JWT Auth & Role-Based Access Control:** ~45 mins
-- **Atomic Publish Job & Content Group Collapsing:** ~1.5 hours
-- **CMS Frontend (React + TS + Vanilla CSS):** ~2 hours
-- **Netflix-Style Viewer UI with mypeblo.com Branding (React + TS):** ~2 hours
-- **Testing, CI Pipeline & Documentation:** ~45 mins
+The challenge noted that the seed data was deliberately imperfect. Here is how I handled the traps:
+
+1. **Missing Artwork & Sections:** Some shows (like *Rhyme Rangers*) lacked sections or artwork. The backend exposes a `GET /admin/validation-report` endpoint. The CMS Publish page hits this and disables the Publish button if blocking issues exist, showing the editor exactly what is missing in human-readable terms.
+2. **Duplicate Language Groups:** `ep_9001` duplicated a Hindi variant of another episode. I enforced a `UNIQUE(content_group, language)` constraint in Postgres; the seed script catches this IntegrityError and skips duplicates gracefully.
+3. **Season 0 (Trailers):** The publish job actively filters out `season_number == 0` when generating the catalogue JSON, ensuring the Viewer UI never renders it as a standard playable season.
+
+---
+
+## 🔒 4. Pipeline & Operability
+
+- **CI/CD Pipeline:** I included a `.github/workflows/ci.yml` file. On every push, this spins up an Ubuntu runner, lints the Python code, verifies dependencies, and executes test builds of the React apps. This ensures the main branch remains deployable.
+- **Secrets Management:** The `.env.example` file contains all necessary environment variables. In a production environment, secrets (like `JWT_SECRET_KEY` and DB passwords) should **never** be checked into version control. They should be managed via AWS Secrets Manager or HashiCorp Vault, and injected into the ECS/Kubernetes containers dynamically at runtime.
+- **Alerting & Health:** The API exposes a `/health` endpoint. In production, I would alert on **Publish Job Failures**. If the atomic publish job fails continuously, editors are flying blind and users aren't receiving new content, which is a critical business failure.
+
+---
+
+## ⏱ 5. Time Spent
+
+- **Backend Scaffolding & Models:** 1 hour
+- **Storage Abstraction & Image Validation:** 45 minutes
+- **Auth & Role-Based Access:** 30 minutes
+- **Atomic Publish Job:** 1 hour
+- **CMS Frontend:** 45 minutes
+- **Viewer UI (Netflix Style):** 30 minutes
+- **CI/CD & Documentation:** 30 minutes

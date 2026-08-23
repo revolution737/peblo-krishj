@@ -6,12 +6,24 @@ const Home: React.FC = () => {
   const [catalog, setCatalog] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [language, setLanguage] = useState('');
+  const [dropdownOpen, setDropdownOpen] = useState(false);
   const [selectedShow, setSelectedShow] = useState<any>(null);
+
+  const languageOptions = [
+    { code: '', label: 'All Languages' },
+    { code: 'en', label: 'English' },
+    { code: 'hi', label: 'Hindi' }
+  ];
 
   useEffect(() => {
     const fetchCatalog = async () => {
       try {
-        const url = search.trim() ? `/catalog/search?q=${encodeURIComponent(search)}` : `/catalog`;
+        const params = new URLSearchParams();
+        if (search.trim()) params.append('q', search.trim());
+        if (language) params.append('language', language);
+        
+        const url = params.toString() ? `/catalog/search?${params.toString()}` : `/catalog`;
         const res = await api.get(url);
         setCatalog(res.data);
       } catch (err) {
@@ -25,7 +37,7 @@ const Home: React.FC = () => {
       fetchCatalog();
     }, 250);
     return () => clearTimeout(timer);
-  }, [search]);
+  }, [search, language]);
 
   // Handle scroll for navbar styling
   const [scrolled, setScrolled] = useState(false);
@@ -61,18 +73,43 @@ const Home: React.FC = () => {
     <div>
       <nav className={`navbar ${scrolled ? 'scrolled' : ''}`}>
         <div className="brand">PEBLO TV</div>
-        <div>
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
           <input 
             type="text" 
-            placeholder="Search for shows, episodes, languages..." 
+            placeholder="Search for shows or episodes..." 
             className="search-bar"
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
+          <div className="custom-dropdown-container">
+            <button 
+              className="language-select"
+              onClick={() => setDropdownOpen(!dropdownOpen)}
+            >
+              {languageOptions.find(o => o.code === language)?.label || 'All Languages'}
+            </button>
+            
+            {dropdownOpen && (
+              <div className="custom-dropdown-menu">
+                {languageOptions.map(option => (
+                  <div 
+                    key={option.code}
+                    className={`custom-dropdown-item ${language === option.code ? 'active' : ''}`}
+                    onClick={() => {
+                      setLanguage(option.code);
+                      setDropdownOpen(false);
+                    }}
+                  >
+                    {option.label}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </nav>
 
-      {!search && heroShow && (
+      {!search && !language && heroShow && (
         <div className="hero" style={{ backgroundImage: `url(${getArtwork(heroShow, 'banner')})` }}>
           <div className="hero-overlay"></div>
           <div className="hero-content">
@@ -90,7 +127,7 @@ const Home: React.FC = () => {
         </div>
       )}
 
-      <div style={{ marginTop: (!search && heroShow) ? '-80px' : '90px', position: 'relative', zIndex: 20 }}>
+      <div style={{ marginTop: (!search && !language && heroShow) ? '-80px' : '90px', position: 'relative', zIndex: 20 }}>
         {sections.length === 0 ? (
           <div style={{ padding: '6rem 4%', textAlign: 'center', color: 'var(--text-muted)' }}>
             <Film size={48} style={{ marginBottom: '1rem', opacity: 0.5 }} />

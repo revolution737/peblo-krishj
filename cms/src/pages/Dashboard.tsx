@@ -240,12 +240,12 @@ const Dashboard: React.FC = () => {
                   className="btn btn-secondary flex items-center justify-center gap-2 mt-2" 
                   style={{ width: '100%', background: isExpanded ? 'var(--surface-color-solid)' : '' }}
                 >
-                  <Eye size={16} /> {isExpanded ? 'Close Episodes & Artwork' : 'Manage Episodes & Artwork'}
+                  <Eye size={16} /> {isExpanded ? 'Collapse' : 'Manage Episodes & Artwork'}
                 </button>
 
                 {isExpanded && (
-                  <div className="mt-6 pt-6 animate-fade-in" style={{ borderTop: '1px solid var(--border-color)' }}>
-                    <h3 style={{ paddingBottom: '0.5rem', marginBottom: '1rem' }}>
+                  <div className="mt-4 animate-fade-in" style={{ padding: '1.5rem', background: 'var(--surface-color-solid)', borderRadius: 'var(--radius-md)' }}>
+                    <h3 style={{ paddingBottom: '0.25rem', marginBottom: '0.75rem' }}>
                       Seasons & Episodes
                     </h3>
 
@@ -256,34 +256,103 @@ const Dashboard: React.FC = () => {
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                         {showEpisodes.map(ep => (
-                          <div key={ep.id} className="glass-panel" style={{ padding: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <div>
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className="badge badge-primary" style={{ fontSize: '0.7rem' }}>
-                                  Ep {ep.episode_number}
-                                </span>
-                                <strong style={{ fontSize: '0.95rem' }}>{ep.episode_title}</strong>
-                                {ep.episode_number === 0 && <span className="badge badge-warning">Trailer (S0)</span>}
+                          <div key={ep.id} className="glass-panel" style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <div>
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="badge badge-primary" style={{ fontSize: '0.7rem' }}>
+                                    Ep {ep.episode_number}
+                                  </span>
+                                  <strong style={{ fontSize: '0.95rem' }}>{ep.episode_title}</strong>
+                                  {ep.episode_number === 0 && <span className="badge badge-warning">Trailer (S0)</span>}
+                                </div>
+                                <div className="flex items-center gap-4 text-sm" style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
+                                  <span className="flex items-center gap-1"><Globe size={13} /> Lang: {ep.language}</span>
+                                  <span className="flex items-center gap-1"><Layers size={13} /> Group: {ep.content_group}</span>
+                                  {ep.duration_seconds && (
+                                    <span className="flex items-center gap-1"><Clock size={13} /> {Math.floor(ep.duration_seconds / 60)}m {ep.duration_seconds % 60}s</span>
+                                  )}
+                                  <span className={`badge ${ep.status === 'published' ? 'badge-success' : 'badge-warning'}`} style={{ fontSize: '0.65rem' }}>
+                                    {ep.status}
+                                  </span>
+                                </div>
                               </div>
-                              <div className="flex items-center gap-4 text-sm" style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
-                                <span className="flex items-center gap-1"><Globe size={13} /> Lang: {ep.language}</span>
-                                <span className="flex items-center gap-1"><Layers size={13} /> Group: {ep.content_group}</span>
-                                {ep.duration_seconds && (
-                                  <span className="flex items-center gap-1"><Clock size={13} /> {Math.floor(ep.duration_seconds / 60)}m {ep.duration_seconds % 60}s</span>
-                                )}
-                                <span className={`badge ${ep.status === 'published' ? 'badge-success' : 'badge-warning'}`} style={{ fontSize: '0.65rem' }}>
-                                  {ep.status}
-                                </span>
-                              </div>
-                            </div>
 
-                            <button 
-                              onClick={() => setUploadModalEpisode(ep)}
-                              className="btn btn-secondary" 
-                              style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
-                            >
-                              <ImageIcon size={15} /> Upload Artwork
-                            </button>
+                              <button 
+                                onClick={() => setUploadModalEpisode(uploadModalEpisode?.id === ep.id ? null : ep)}
+                                className="btn btn-secondary" 
+                                style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
+                              >
+                                {uploadModalEpisode?.id === ep.id ? <><X size={15} /> Cancel</> : <><ImageIcon size={15} /> Upload Artwork</>}
+                              </button>
+                            </div>
+                            
+                            {uploadModalEpisode?.id === ep.id && (
+                              <div className="animate-fade-in" style={{ 
+                                marginTop: '1rem', 
+                                padding: '1rem', 
+                                background: '#3f3f46', 
+                                borderRadius: 'var(--radius-md)' 
+                              }}>
+                                <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1rem' }}>
+                                  Target: <strong>{uploadModalEpisode.episode_title}</strong> (Group: {uploadModalEpisode.content_group})
+                                </p>
+
+                                {uploadMessage && (
+                                  <div className="glass-card mb-4" style={{
+                                    borderColor: uploadMessage.type === 'success' ? 'rgba(16, 185, 129, 0.4)' : 'rgba(239, 68, 68, 0.4)',
+                                    background: uploadMessage.type === 'success' ? 'rgba(16, 185, 129, 0.08)' : 'rgba(239, 68, 68, 0.08)',
+                                    padding: '0.75rem 1rem'
+                                  }}>
+                                    <p style={{ margin: 0, fontSize: '0.85rem', color: uploadMessage.type === 'success' ? '#6ee7b7' : '#fca5a5' }}>
+                                      {uploadMessage.text}
+                                    </p>
+                                  </div>
+                                )}
+
+                                <form onSubmit={handleArtworkUpload} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                    <div>
+                                      <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>
+                                        Artwork Specification
+                                      </label>
+                                      <select 
+                                        className="input-field" 
+                                        value={artworkType} 
+                                        onChange={e => setArtworkType(e.target.value as any)}
+                                      >
+                                        <option value="poster">Poster (2:3 Aspect Ratio)</option>
+                                        <option value="banner">Banner (16:9 Aspect Ratio)</option>
+                                        <option value="thumbnail">Thumbnail (16:9 Aspect Ratio)</option>
+                                      </select>
+                                    </div>
+
+                                    <div>
+                                      <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>
+                                        Select Image (JPEG or PNG)
+                                      </label>
+                                      <input 
+                                        type="file" 
+                                        accept="image/jpeg,image/png"
+                                        className="input-field" 
+                                        onChange={e => setArtworkFile(e.target.files?.[0] || null)}
+                                        required
+                                      />
+                                    </div>
+                                  </div>
+
+                                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+                                    <button 
+                                      type="submit" 
+                                      disabled={uploadLoading || !artworkFile}
+                                      className="btn btn-primary"
+                                    >
+                                      {uploadLoading ? 'Uploading...' : 'Validate & Upload'}
+                                    </button>
+                                  </div>
+                                </form>
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -296,94 +365,8 @@ const Dashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Artwork Upload Modal */}
-      {uploadModalEpisode && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(0,0,0,0.85)', zIndex: 1100,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem'
-        }} onClick={() => setUploadModalEpisode(null)}>
-          <div className="glass-panel animate-fade-in" style={{
-            maxWidth: '520px', width: '100%', padding: '2rem', position: 'relative'
-          }} onClick={e => e.stopPropagation()}>
-            <button 
-              onClick={() => setUploadModalEpisode(null)}
-              style={{
-                position: 'absolute', top: '1.2rem', right: '1.2rem',
-                background: 'transparent', border: 'none', color: 'var(--text-secondary)',
-                cursor: 'pointer'
-              }}
-            >
-              <X size={20} />
-            </button>
-
-            <h3 style={{ margin: '0 0 0.5rem 0' }}>Upload Episode Artwork</h3>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
-              Target: <strong>{uploadModalEpisode.episode_title}</strong> (Group: {uploadModalEpisode.content_group})
-            </p>
-
-            {uploadMessage && (
-              <div className="glass-card mb-4" style={{
-                borderColor: uploadMessage.type === 'success' ? 'rgba(16, 185, 129, 0.4)' : 'rgba(239, 68, 68, 0.4)',
-                background: uploadMessage.type === 'success' ? 'rgba(16, 185, 129, 0.08)' : 'rgba(239, 68, 68, 0.08)',
-                padding: '0.75rem 1rem'
-              }}>
-                <p style={{ margin: 0, fontSize: '0.85rem', color: uploadMessage.type === 'success' ? '#6ee7b7' : '#fca5a5' }}>
-                  {uploadMessage.text}
-                </p>
-              </div>
-            )}
-
-            <form onSubmit={handleArtworkUpload} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>
-                  Artwork Specification
-                </label>
-                <select 
-                  className="input-field" 
-                  value={artworkType} 
-                  onChange={e => setArtworkType(e.target.value as any)}
-                >
-                  <option value="poster">Poster (2:3 Aspect Ratio, ~600x900px, max 200KB)</option>
-                  <option value="banner">Banner (16:9 Aspect Ratio, ~1280x720px, max 200KB)</option>
-                  <option value="thumbnail">Thumbnail (16:9 Aspect Ratio, ~640x360px, max 200KB)</option>
-                </select>
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>
-                  Select Image (JPEG or PNG)
-                </label>
-                <input 
-                  type="file" 
-                  accept="image/jpeg,image/png"
-                  className="input-field" 
-                  onChange={e => setArtworkFile(e.target.files?.[0] || null)}
-                  required
-                />
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1rem' }}>
-                <button 
-                  type="button" 
-                  onClick={() => setUploadModalEpisode(null)}
-                  className="btn btn-secondary"
-                >
-                  Cancel
-                </button>
-                <button 
-                  type="submit" 
-                  disabled={uploadLoading || !artworkFile}
-                  className="btn btn-primary"
-                >
-                  {uploadLoading ? 'Uploading...' : 'Validate & Upload'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
+
   );
 };
 

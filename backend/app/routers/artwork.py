@@ -12,6 +12,7 @@ from app.models.artwork import Artwork
 from app.schemas.artwork import ArtworkResponse
 from app.auth.dependencies import require_editor
 from app.storage.local import storage
+from app.services.audit import log_audit_event
 
 router = APIRouter(prefix="/admin/artwork", tags=["admin/artwork"])
 
@@ -134,6 +135,15 @@ async def upload_artwork(
         )
         db.add(artwork_record)
         
+    await db.flush()
+    await log_audit_event(
+        db, 
+        user_id=uuid.UUID(user["id"]), 
+        action="UPLOAD", 
+        target_type="ARTWORK", 
+        target_id=str(artwork_record.id), 
+        details={"type": artwork_type, "filename": file.filename}
+    )
     await db.commit()
     await db.refresh(artwork_record)
     

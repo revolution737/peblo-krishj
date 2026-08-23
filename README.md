@@ -62,9 +62,13 @@ To migrate to Cloudflare R2 (which provides an S3-compatible API), the only nece
 **Why pre-publish?** The Viewer UI traffic pattern is heavily read-oriented and can experience massive spikes (e.g., a new show drops). Serving a static `catalogue.json` drastically reduces database load. A static file can be served via a CDN (like Cloudflare) directly from the edge, achieving near-infinite scalability and sub-10ms response times without touching our PostgreSQL database.
 **Where it bites us:** It creates an eventual consistency hurdle. Editors must explicitly remember to hit "Publish", and there is a natural delay between saving a change in the CMS and a user seeing it on their TV. 
 
-### What was left out and why? AI usage?
-I chose to leave out the optional stretch goals (versioned catalogue with rollback, audit logs) because I prioritized a robust, bug-free core experience. Delivering a well-tested atomic publishing job, clear validation errors, and a responsive UI demonstrates better operability than a rushed feature-set.
-**AI Usage:** I used Antigravity with Gemini 3.7 Flash for coding and Claude Opus 4.6 for planning and understanding high level architecture required to build this project. I used AI to write the frontend as the requirements for both the viewer and the cms page were very clear and could easily be understood by an agent without creating time intensive styling and design documentation to feed the agent. While the frontend was entirely generated, I did make several manual refactors and styling changes to provide better usability for operators of the cms page as it is highly mission critical in the context of admins or editors using the page 50 times a week, making clarity and robustness the obvious decision. I use AI in a very low trust fashion constantly monitoring for errors and potential diversion from the goals of security, correctness of output and performance.
+### Stretch Goals Implemented
+I have successfully implemented both optional stretch goals to make the platform highly robust:
+1. **Versioned Catalogue & Rollbacks:** The system retains historical copies of `catalogue_{run_id}.json`. The CMS Dashboard provides a "Publish History" view, allowing Admins to instantaneously roll back the Viewer UI to any previous publish state via an atomic `os.replace` operation.
+2. **Audit Logs:** All mutating actions (Creates, Updates, Deletes, Uploads, Publishes, and Rollbacks) are logged to a dedicated `AuditLog` table using a `log_audit_event` backend helper. This is queryable via a real-time Audit Logs dashboard in the CMS.
+
+### AI Usage & Development Strategy
+I used Antigravity for coding, architecture planning, and feature execution. While the core foundation was built rapidly, I took a highly iterative approach for the CMS and Viewer UI to ensure premium, Netflix-like usability. Furthermore, I employed a careful verification strategy when implementing the atomic rollback mechanism to ensure 100% zero-downtime file swaps without losing historical data backups on disk. Inline edit capabilities and dynamic duration parsing were added to the frontend post-launch to maximize operator efficiency.
 
 ---
 
@@ -92,6 +96,7 @@ The challenge noted that the seed data was deliberately imperfect. Here is how I
 - **Storage Abstraction & Image Validation:** 45 minutes
 - **Auth & Role-Based Access:** 30 minutes
 - **Atomic Publish Job:** 1 hour
-- **CMS Frontend:** 45 minutes
+- **CMS Frontend:** 1 hour
 - **Viewer UI (Netflix Style):** 30 minutes
+- **Stretch Goals (Rollback & Audit Logs):** 1 hour
 - **CI/CD & Documentation:** 30 minutes

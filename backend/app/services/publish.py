@@ -122,7 +122,7 @@ async def publish_catalogue(db: AsyncSession, user_id: uuid.UUID) -> PublishRun:
         }
         
         # Atomic Write
-        # Write to .tmp first, then rename
+        # Write to .tmp first, then copy to history file, then replace live file
         json_str = json.dumps(catalogue_data, indent=2)
         base_dir = storage.base_path
         tmp_path = os.path.join(base_dir, f"catalogue_{run.id}.json.tmp")
@@ -132,12 +132,9 @@ async def publish_catalogue(db: AsyncSession, user_id: uuid.UUID) -> PublishRun:
         async with aiofiles.open(tmp_path, "w") as f:
             await f.write(json_str)
             
-        os.rename(tmp_path, final_path)
-        
-        # Point the live symlink/copy to the new version atomically if possible
-        # For simplicity and cross-platform safety, we'll write a small pointer file or just copy
-        # Actually, os.replace is atomic for updating a file
-        os.replace(final_path, live_path)
+        import shutil
+        shutil.copy2(tmp_path, final_path)
+        os.replace(tmp_path, live_path)
         
         # Update run record
         run.status = "success"

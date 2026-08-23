@@ -10,7 +10,8 @@ import {
   Layers, 
   X,
   Clock,
-  Globe
+  Globe,
+  Edit2
 } from 'lucide-react';
 import api from '../api';
 
@@ -46,12 +47,24 @@ const Dashboard: React.FC = () => {
   const [showEpisodes, setShowEpisodes] = useState<Episode[]>([]);
   const [loadingDetails, setLoadingDetails] = useState(false);
 
+  // History & Rollback state
+  const [publishHistory, setPublishHistory] = useState<any[]>([]);
+  const [isHistoryExpanded, setIsHistoryExpanded] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
   // Artwork upload modal state
   const [uploadModalEpisode, setUploadModalEpisode] = useState<Episode | null>(null);
   const [artworkType, setArtworkType] = useState<'poster' | 'banner' | 'thumbnail'>('poster');
   const [artworkFile, setArtworkFile] = useState<File | null>(null);
   const [uploadLoading, setUploadLoading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Edit state
+  const [editingShowId, setEditingShowId] = useState<string | null>(null);
+  const [editingShowTitle, setEditingShowTitle] = useState('');
+  
+  const [editingEpisodeId, setEditingEpisodeId] = useState<string | null>(null);
+  const [editingEpisodeTitle, setEditingEpisodeTitle] = useState('');
 
   const role = localStorage.getItem('userRole') || 'admin';
 
@@ -102,6 +115,36 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const fetchHistory = async () => {
+    setHistoryLoading(true);
+    try {
+      const res = await api.get('/admin/catalog/history');
+      setPublishHistory(res.data.history);
+    } catch (err: any) {
+      console.error('Failed to fetch history', err);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  const toggleHistory = () => {
+    if (!isHistoryExpanded) {
+      fetchHistory();
+    }
+    setIsHistoryExpanded(!isHistoryExpanded);
+  };
+
+  const handleRollback = async (runId: string) => {
+    if (!window.confirm('Are you sure you want to rollback to this version? This will immediately change the live viewer catalog.')) return;
+    try {
+      await api.post(`/admin/catalog/rollback/${runId}`);
+      alert('Rollback successful!');
+      fetchHistory(); // Refresh history
+    } catch (err: any) {
+      alert(err.response?.data?.detail || 'Rollback failed.');
+    }
+  };
+
   const handleArtworkUpload = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!uploadModalEpisode || !artworkFile) return;
@@ -133,6 +176,32 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const saveShowTitle = async (showId: string) => {
+    if (!editingShowTitle.trim()) return;
+    try {
+      const show = shows.find(s => s.id === showId);
+      if (!show) return;
+      await api.put(`/admin/shows/${showId}`, { ...show, title: editingShowTitle });
+      setShows(shows.map(s => s.id === showId ? { ...s, title: editingShowTitle } : s));
+      setEditingShowId(null);
+    } catch (err: any) {
+      alert(err.response?.data?.detail || 'Failed to update show title');
+    }
+  };
+
+  const saveEpisodeTitle = async (episodeId: string) => {
+    if (!editingEpisodeTitle.trim()) return;
+    try {
+      const ep = showEpisodes.find(e => e.id === episodeId);
+      if (!ep) return;
+      await api.put(`/admin/episodes/${episodeId}`, { ...ep, episode_title: editingEpisodeTitle });
+      setShowEpisodes(showEpisodes.map(e => e.id === episodeId ? { ...e, episode_title: editingEpisodeTitle } : e));
+      setEditingEpisodeId(null);
+    } catch (err: any) {
+      alert(err.response?.data?.detail || 'Failed to update episode title');
+    }
+  };
+
   const filteredShows = shows.filter(s => 
     (s.title || '').toLowerCase().includes(search.toLowerCase()) ||
     (s.section || '').toLowerCase().includes(search.toLowerCase())
@@ -148,6 +217,14 @@ const Dashboard: React.FC = () => {
           </p>
         </div>
         <div className="flex gap-4">
+          <button 
+            onClick={toggleHistory}
+            className="btn btn-secondary"
+            title="View publish history & rollback"
+          >
+            <Clock size={18} />
+            {isHistoryExpanded ? 'Close History' : 'Publish History'}
+          </button>
           <button 
             onClick={handlePublish} 
             disabled={isPublishing || role !== 'admin'}
@@ -181,6 +258,60 @@ const Dashboard: React.FC = () => {
         </div>
       )}
 
+      {isHistoryExpanded && (
+        <div className="glass-card mb-8 animate-fade-in">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl m-0 flex items-center gap-2"><Clock size={20} /> Publish History & Rollbacks</h2>
+            <button onClick={() => setIsHistoryExpanded(false)} className="btn btn-secondary p-2"><X size={16} /></button>
+          </div>
+          
+          <div className="table-responsive">
+            <table className="w-full text-left" style={{ borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                  <th className="p-3 text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Run ID</th>
+                  <th className="p-3 text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Date</th>
+                  <th className="p-3 text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Triggered By</th>
+                  <th className="p-3 text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Stats</th>
+                  <th className="p-3 text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {historyLoading ? (
+                  <tr><td colSpan={5} className="p-4 text-center"><div className="loader inline-block"></div></td></tr>
+                ) : publishHistory.length === 0 ? (
+                  <tr><td colSpan={5} className="p-4 text-center text-secondary">No successful publish runs found.</td></tr>
+                ) : (
+                  publishHistory.map((run, idx) => (
+                    <tr key={run.id} style={{ borderBottom: '1px solid var(--border-color)', background: idx === 0 ? 'rgba(16, 185, 129, 0.05)' : 'transparent' }}>
+                      <td className="p-3 text-sm font-mono">{run.id.split('-')[0]}...</td>
+                      <td className="p-3 text-sm">{new Date(run.completed_at).toLocaleString()}</td>
+                      <td className="p-3 text-sm">{run.triggered_by_email}</td>
+                      <td className="p-3 text-sm">{run.show_count} shows, {run.episode_count} eps</td>
+                      <td className="p-3">
+                        <button 
+                          onClick={() => handleRollback(run.id)}
+                          className="btn btn-secondary"
+                          style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}
+                          disabled={role !== 'admin'}
+                          title={role !== 'admin' ? 'Admins only' : 'Rollback catalog to this version'}
+                        >
+                          {idx === 0 ? 'Current Live' : 'Rollback to this'}
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+            <p className="mt-4 text-xs text-secondary italic">
+              <AlertCircle size={12} className="inline mr-1" />
+              Note: Rolling back replaces the static catalogue JSON file served to users, but does not revert the CMS database. The next manual publish will overwrite the rollback with the current database state.
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center gap-2 mb-6" style={{ maxWidth: '400px' }}>
         <div style={{ position: 'relative', width: '100%' }}>
           <Search size={18} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
@@ -211,7 +342,34 @@ const Dashboard: React.FC = () => {
               <div key={show.id} className="glass-card flex flex-col justify-between">
                 <div>
                   <div className="flex justify-between items-start gap-2 mb-3">
-                    <h3 style={{ margin: 0, fontSize: '1.25rem', wordBreak: 'break-word' }}>{show.title}</h3>
+                    {editingShowId === show.id ? (
+                      <div className="flex items-center gap-2 flex-1">
+                        <input 
+                          type="text" 
+                          className="input-field" 
+                          value={editingShowTitle} 
+                          onChange={(e) => setEditingShowTitle(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === 'Enter') saveShowTitle(show.id); if (e.key === 'Escape') setEditingShowId(null); }}
+                          autoFocus
+                          style={{ padding: '0.25rem 0.5rem', fontSize: '1.1rem' }}
+                        />
+                        <button onClick={() => saveShowTitle(show.id)} className="btn btn-primary" style={{ padding: '0.25rem 0.5rem' }}>Save</button>
+                        <button onClick={() => setEditingShowId(null)} className="btn btn-secondary" style={{ padding: '0.25rem 0.5rem' }}>Cancel</button>
+                      </div>
+                    ) : (
+                      <h3 style={{ margin: 0, fontSize: '1.25rem', wordBreak: 'break-word', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        {show.title}
+                        {role === 'admin' || role === 'editor' ? (
+                          <button 
+                            onClick={() => { setEditingShowId(show.id); setEditingShowTitle(show.title); }}
+                            className="text-secondary hover:text-primary transition-colors"
+                            title="Edit Title"
+                          >
+                            <Edit2 size={16} />
+                          </button>
+                        ) : null}
+                      </h3>
+                    )}
                     <div className="flex gap-2 items-center">
                       <span className={`badge ${show.status === 'published' ? 'badge-success' : 'badge-warning'}`}>
                         {show.status}
@@ -263,7 +421,34 @@ const Dashboard: React.FC = () => {
                                   <span className="badge badge-primary" style={{ fontSize: '0.7rem' }}>
                                     Ep {ep.episode_number}
                                   </span>
-                                  <strong style={{ fontSize: '0.95rem' }}>{ep.episode_title}</strong>
+                                  {editingEpisodeId === ep.id ? (
+                                    <div className="flex items-center gap-2">
+                                      <input 
+                                        type="text" 
+                                        className="input-field" 
+                                        value={editingEpisodeTitle} 
+                                        onChange={(e) => setEditingEpisodeTitle(e.target.value)}
+                                        onKeyDown={(e) => { if (e.key === 'Enter') saveEpisodeTitle(ep.id); if (e.key === 'Escape') setEditingEpisodeId(null); }}
+                                        autoFocus
+                                        style={{ padding: '0.1rem 0.5rem', fontSize: '0.9rem' }}
+                                      />
+                                      <button onClick={() => saveEpisodeTitle(ep.id)} className="btn btn-primary" style={{ padding: '0.1rem 0.5rem', fontSize: '0.8rem' }}>Save</button>
+                                      <button onClick={() => setEditingEpisodeId(null)} className="btn btn-secondary" style={{ padding: '0.1rem 0.5rem', fontSize: '0.8rem' }}>Cancel</button>
+                                    </div>
+                                  ) : (
+                                    <strong style={{ fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                      {ep.episode_title}
+                                      {role === 'admin' || role === 'editor' ? (
+                                        <button 
+                                          onClick={() => { setEditingEpisodeId(ep.id); setEditingEpisodeTitle(ep.episode_title); }}
+                                          className="text-secondary hover:text-primary transition-colors"
+                                          title="Edit Title"
+                                        >
+                                          <Edit2 size={14} />
+                                        </button>
+                                      ) : null}
+                                    </strong>
+                                  )}
                                   {ep.episode_number === 0 && <span className="badge badge-warning">Trailer (S0)</span>}
                                 </div>
                                 <div className="flex items-center gap-4 text-sm" style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>

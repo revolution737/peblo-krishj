@@ -8,6 +8,7 @@ from app.database import get_db
 from app.models.show import Show
 from app.schemas.common import ShowCreate, ShowUpdate, ShowResponse
 from app.auth.dependencies import require_editor
+from app.services.audit import log_audit_event
 
 router = APIRouter(prefix="/admin/shows", tags=["admin/shows"])
 
@@ -24,6 +25,8 @@ async def create_show(show: ShowCreate, db: AsyncSession = Depends(get_db), user
     db_show = Show(**show.model_dump())
     db.add(db_show)
     try:
+        await db.flush()
+        await log_audit_event(db, user_id=uuid.UUID(user["id"]), action="CREATE", target_type="SHOW", target_id=str(db_show.id), details={"title": db_show.title})
         await db.commit()
         await db.refresh(db_show)
         return db_show
@@ -53,6 +56,7 @@ async def update_show(show_id: uuid.UUID, show_update: ShowUpdate, db: AsyncSess
         setattr(db_show, key, value)
         
     try:
+        await log_audit_event(db, user_id=uuid.UUID(user["id"]), action="UPDATE", target_type="SHOW", target_id=str(db_show.id), details={"title": db_show.title})
         await db.commit()
         await db.refresh(db_show)
         return db_show
@@ -67,4 +71,5 @@ async def delete_show(show_id: uuid.UUID, db: AsyncSession = Depends(get_db), us
     if not db_show:
         raise HTTPException(status_code=404, detail="Show not found")
     await db.delete(db_show)
+    await log_audit_event(db, user_id=uuid.UUID(user["id"]), action="DELETE", target_type="SHOW", target_id=str(show_id))
     await db.commit()

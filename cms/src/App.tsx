@@ -4,6 +4,7 @@ import { LayoutDashboard, LogOut, CheckCircle2, Database, AlertCircle, RefreshCw
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import ValidationReport from './pages/ValidationReport';
+import AuditLogs from './pages/AuditLogs';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -101,6 +102,13 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
           >
             <CheckCircle2 size={18} /> Validation Report
           </Link>
+          <Link 
+            to="/audit-logs" 
+            className={`btn ${location.pathname === '/audit-logs' ? 'btn-primary' : 'btn-secondary'} flex items-center justify-start gap-3`} 
+            style={{ width: '100%', justifyContent: 'flex-start' }}
+          >
+            <AlertCircle size={18} /> Audit Logs
+          </Link>
         </nav>
 
         <div style={{ marginTop: 'auto', paddingTop: '1rem', borderTop: '1px solid var(--border-color)' }}>
@@ -131,6 +139,7 @@ const App: React.FC = () => {
         <Route path="/login" element={<Login />} />
         <Route path="/" element={<ProtectedRoute><AppLayout><Dashboard /></AppLayout></ProtectedRoute>} />
         <Route path="/validation" element={<ProtectedRoute><AppLayout><ValidationReport /></AppLayout></ProtectedRoute>} />
+        <Route path="/audit-logs" element={<ProtectedRoute><AppLayout><AuditLogs /></AppLayout></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </ErrorBoundary>

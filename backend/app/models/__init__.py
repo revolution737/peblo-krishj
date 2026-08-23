@@ -5,5 +5,6 @@ from app.models.season import Season
 from app.models.episode import Episode
 from app.models.artwork import Artwork
 from app.models.publish_run import PublishRun
+from app.models.audit_log import AuditLog
 
-__all__ = ["Base", "User", "Show", "Season", "Episode", "Artwork", "PublishRun"]
+__all__ = ["Base", "User", "Show", "Season", "Episode", "Artwork", "PublishRun", "AuditLog"]

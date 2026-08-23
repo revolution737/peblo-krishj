@@ -9,6 +9,7 @@ from app.models.episode import Episode
 from app.models.artwork import Artwork
 from app.schemas.common import EpisodeCreate, EpisodeUpdate, EpisodeResponse
 from app.auth.dependencies import require_editor
+from app.services.audit import log_audit_event
 
 router = APIRouter(prefix="/admin/episodes", tags=["admin/episodes"])
 
@@ -29,6 +30,8 @@ async def create_episode(episode: EpisodeCreate, db: AsyncSession = Depends(get_
     db_episode = Episode(**episode.model_dump())
     db.add(db_episode)
     try:
+        await db.flush()
+        await log_audit_event(db, user_id=uuid.UUID(user["id"]), action="CREATE", target_type="EPISODE", target_id=str(db_episode.id), details={"title": db_episode.episode_title})
         await db.commit()
         await db.refresh(db_episode)
         return db_episode
@@ -70,6 +73,7 @@ async def update_episode(episode_id: uuid.UUID, episode_update: EpisodeUpdate, d
         setattr(db_episode, key, value)
         
     try:
+        await log_audit_event(db, user_id=uuid.UUID(user["id"]), action="UPDATE", target_type="EPISODE", target_id=str(db_episode.id), details={"title": db_episode.episode_title})
         await db.commit()
         await db.refresh(db_episode)
         return db_episode
@@ -86,4 +90,5 @@ async def delete_episode(episode_id: uuid.UUID, db: AsyncSession = Depends(get_d
     if not db_episode:
         raise HTTPException(status_code=404, detail="Episode not found")
     await db.delete(db_episode)
+    await log_audit_event(db, user_id=uuid.UUID(user["id"]), action="DELETE", target_type="EPISODE", target_id=str(episode_id))
     await db.commit()

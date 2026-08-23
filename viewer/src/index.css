@@ -103,6 +103,7 @@ h1, h2, h3, h4, h5, h6, .brand, .hero-title, .row-title {
   color: var(--text-secondary);
   display: -webkit-box;
   -webkit-line-clamp: 3;
+  line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }

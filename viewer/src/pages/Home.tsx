@@ -213,8 +213,11 @@ const Home: React.FC = () => {
                            alt="Thumbnail" 
                          />
                          <div style={{ flex: 1 }}>
-                           <h4 style={{ margin: '0 0 0.35rem 0', fontSize: '1.1rem', fontWeight: '600', color: 'var(--text-primary)' }}>{ep.episode_title}</h4>
-                           <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)', display: 'flex', gap: '1rem' }}>
+                           <h4 style={{ margin: '0 0 0.35rem 0', fontSize: '1.1rem', fontWeight: '600', color: 'var(--text-primary)' }}>{ep.title}</h4>
+                           <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)', display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                             {ep.duration_seconds && (
+                               <span>Duration: <strong style={{ color: 'var(--text-secondary)' }}>{Math.floor(ep.duration_seconds / 60)}m {ep.duration_seconds % 60}s</strong></span>
+                             )}
                              <span>Languages: <strong style={{ color: 'var(--text-secondary)' }}>{(ep.languages || []).join(', ') || 'en'}</strong></span>
                            </div>
                          </div>

@@ -62,10 +62,13 @@ const Home: React.FC = () => {
   const getArtwork = (item: any, type: string) => {
     const artworkPath = item?.artwork?.[type];
     if (artworkPath) return `http://localhost:8000${artworkPath}`;
+    
+    if (type === 'thumbnail') return '';
+    
     const seed = (item?.title || 'show').length;
     if (type === 'banner') return `https://picsum.photos/seed/${seed}banner/1280/720`;
     if (type === 'poster') return `https://picsum.photos/seed/${seed}poster/600/900`;
-    return `https://picsum.photos/seed/${seed}thumb/640/360`;
+    return '';
   };
 
   if (loading && !catalog) {

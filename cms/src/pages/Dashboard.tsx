@@ -216,7 +216,12 @@ const Dashboard: React.FC = () => {
             Manage shows, episodes, upload artworks, and publish to the viewer.
           </p>
         </div>
-        <div className="flex gap-4">
+        <div className="flex gap-4 items-center">
+          {role !== 'admin' && (
+            <span className="text-warning text-sm flex items-center gap-1" style={{ color: 'var(--warning-color)' }}>
+              <AlertCircle size={14} /> Only admins can publish
+            </span>
+          )}
           <button 
             onClick={toggleHistory}
             className="btn btn-secondary"
@@ -464,7 +469,15 @@ const Dashboard: React.FC = () => {
                               </div>
 
                               <button 
-                                onClick={() => setUploadModalEpisode(uploadModalEpisode?.id === ep.id ? null : ep)}
+                                onClick={() => {
+                                  if (uploadModalEpisode?.id === ep.id) {
+                                    setUploadModalEpisode(null);
+                                  } else {
+                                    setUploadModalEpisode(ep);
+                                    setUploadMessage(null);
+                                    setArtworkFile(null);
+                                  }
+                                }}
                                 className="btn btn-secondary" 
                                 style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
                               >

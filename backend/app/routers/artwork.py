@@ -160,3 +160,27 @@ async def get_episode_artwork(
 ):
     result = await db.execute(select(Artwork).where(Artwork.episode_id == episode_id))
     return result.scalars().all()
+
+@router.delete("/{artwork_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_artwork(
+    artwork_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(require_editor)
+):
+    result = await db.execute(select(Artwork).where(Artwork.id == artwork_id))
+    artwork = result.scalar_one_or_none()
+    if not artwork:
+        raise HTTPException(status_code=404, detail="Artwork not found")
+        
+    await storage.delete(artwork.storage_path)
+    await db.delete(artwork)
+    await log_audit_event(
+        db, 
+        user_id=uuid.UUID(user["id"]), 
+        action="DELETE", 
+        target_type="ARTWORK", 
+        target_id=str(artwork.id), 
+        details={"type": artwork.artwork_type}
+    )
+    await db.commit()
+    return None

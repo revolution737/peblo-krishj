@@ -24,6 +24,8 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run Tests
+        env:
+          STORAGE_LOCAL_PATH: ./storage
         run: |
           cd backend
           python -m pytest tests/

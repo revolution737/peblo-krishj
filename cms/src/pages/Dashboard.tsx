@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { 
-  UploadCloud, Eye, AlertCircle, Search, CheckCircle2, 
+  UploadCloud, Eye, Search, 
   Image as ImageIcon, Film, Layers, X, Clock, Globe, Edit2, 
-  Plus, ChevronLeft, ChevronRight, Upload
+  Plus, ChevronLeft, ChevronRight, Upload, Trash2
 } from 'lucide-react';
 import api from '../api';
 
@@ -40,7 +40,6 @@ const Dashboard: React.FC = () => {
   const [shows, setShows] = useState<Show[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isPublishing, setIsPublishing] = useState(false);
-  const [publishResult, setPublishResult] = useState<any>(null);
   const [search, setSearch] = useState('');
   
   // Filters & Pagination
@@ -56,7 +55,6 @@ const Dashboard: React.FC = () => {
   // History & Rollback state
   const [publishHistory, setPublishHistory] = useState<any[]>([]);
   const [isHistoryExpanded, setIsHistoryExpanded] = useState(false);
-  const [historyLoading, setHistoryLoading] = useState(false);
 
   // Creation Modals
   const [isCreateShowOpen, setIsCreateShowOpen] = useState(false);
@@ -130,26 +128,22 @@ const Dashboard: React.FC = () => {
   const handlePublish = async () => {
     if (!window.confirm('Are you sure you want to publish the catalog?')) return;
     setIsPublishing(true);
-    setPublishResult(null);
     try {
-      const response = await api.post('/admin/catalog/publish');
-      setPublishResult({ type: 'success', data: response.data });
+      await api.post('/admin/catalog/publish');
+      alert('Published successfully!');
     } catch (err: any) {
-      setPublishResult({ type: 'error', message: err.response?.data?.detail || 'Failed to publish catalog.' });
+      alert(err.response?.data?.detail || 'Failed to publish catalog.');
     } finally {
       setIsPublishing(false);
     }
   };
 
   const fetchHistory = async () => {
-    setHistoryLoading(true);
     try {
       const res = await api.get('/admin/catalog/history');
       setPublishHistory(res.data.history);
     } catch (err: any) {
       console.error('Failed to fetch history', err);
-    } finally {
-      setHistoryLoading(false);
     }
   };
 
@@ -259,9 +253,21 @@ const Dashboard: React.FC = () => {
       try {
         await api.post('/admin/artwork/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' }});
         setUploadMessage({ type: 'success', text: `Uploaded ${type} successfully!`});
-        fetchEpisodeArtwork(uploadModalEpisode.id);
+        await fetchEpisodeArtwork(uploadModalEpisode.id);
       } catch (err: any) {
         setUploadMessage({ type: 'error', text: err.response?.data?.detail || 'Upload failed.' });
+        throw err;
+      }
+  };
+
+  const deleteArtwork = async (artworkId: string) => {
+      if (!window.confirm('Are you sure you want to delete this artwork?')) return;
+      try {
+          await api.delete(`/admin/artwork/${artworkId}`);
+          setUploadMessage({ type: 'success', text: 'Artwork deleted successfully!'});
+          if (uploadModalEpisode) fetchEpisodeArtwork(uploadModalEpisode.id);
+      } catch (err: any) {
+          setUploadMessage({ type: 'error', text: err.response?.data?.detail || 'Delete failed.' });
       }
   };
 
@@ -400,7 +406,7 @@ const Dashboard: React.FC = () => {
                     {loadingDetails ? <div className="flex justify-center p-4"><div className="loader" /></div> : showEpisodes.length === 0 ? <p className="text-secondary">No episodes.</p> : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                         {showEpisodes.map(ep => (
-                          <div key={ep.id} className="glass-panel p-4 flex flex-col gap-4">
+                          <div key={ep.id} className="glass-panel flex flex-col gap-4" style={{ padding: '1.5rem', borderRadius: '12px' }}>
                             <div className="flex justify-between items-center">
                               {editingEpisodeId === ep.id ? (
                                 <div className="flex flex-wrap items-center gap-2 flex-1">
@@ -417,7 +423,8 @@ const Dashboard: React.FC = () => {
                                 <div>
                                     <div className="flex items-center gap-2 mb-1">
                                     <span className="badge badge-primary">Ep {ep.episode_number}</span>
-                                    <strong className="flex items-center gap-2">{ep.episode_title} <button onClick={() => { setEditingEpisodeId(ep.id); setEditingEpisode(ep); }} className="text-secondary hover:text-primary"><Edit2 size={14} /></button></strong>
+                                    {ep.episode_number === 0 && <span className="badge badge-warning">Trailer (S0)</span>}
+                                    <strong className="flex items-center gap-2" style={{ fontSize: '1.1rem' }}>{ep.episode_title} <button onClick={() => { setEditingEpisodeId(ep.id); setEditingEpisode(ep); }} className="text-secondary hover:text-primary"><Edit2 size={14} /></button></strong>
                                     </div>
                                     <div className="flex gap-4 text-sm text-secondary">
                                         <span><Globe size={13} className="inline mr-1"/> {ep.language}</span>
@@ -437,8 +444,8 @@ const Dashboard: React.FC = () => {
                             
                             {/* 3-Slot Artwork UI */}
                             {uploadModalEpisode?.id === ep.id && (
-                              <div className="bg-[#3f3f46] p-4 rounded-lg mt-2" style={{ background: '#3f3f46' }}>
-                                <h4 className="mb-4 text-white" style={{color: 'white'}}>Artwork for: {ep.episode_title}</h4>
+                              <div style={{ background: 'rgba(0, 0, 0, 0.2)', padding: '1.5rem', borderRadius: '12px', border: '1px solid var(--border-color)', marginTop: '0.5rem' }}>
+                                <h4 className="mb-4" style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-color)' }}>Artwork for: {ep.episode_title}</h4>
                                 {uploadMessage && (
                                     <div style={{
                                         padding: '0.75rem', 
@@ -450,13 +457,17 @@ const Dashboard: React.FC = () => {
                                         {uploadMessage.text}
                                     </div>
                                 )}
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.5rem' }}>
                                     <ArtworkSlot 
                                         type="poster" 
                                         label="Poster (2:3)" 
                                         dimensions="~600x900px" 
                                         artwork={episodeArtworks.find(a => a.artwork_type === 'poster')} 
                                         onUpload={(file) => uploadArtwork('poster', file)} 
+                                        onDelete={() => {
+                                            const art = episodeArtworks.find(a => a.artwork_type === 'poster');
+                                            if (art) deleteArtwork(art.id);
+                                        }}
                                     />
                                     <ArtworkSlot 
                                         type="banner" 
@@ -464,6 +475,10 @@ const Dashboard: React.FC = () => {
                                         dimensions="~1280x720px" 
                                         artwork={episodeArtworks.find(a => a.artwork_type === 'banner')} 
                                         onUpload={(file) => uploadArtwork('banner', file)} 
+                                        onDelete={() => {
+                                            const art = episodeArtworks.find(a => a.artwork_type === 'banner');
+                                            if (art) deleteArtwork(art.id);
+                                        }}
                                     />
                                     <ArtworkSlot 
                                         type="thumbnail" 
@@ -471,6 +486,10 @@ const Dashboard: React.FC = () => {
                                         dimensions="~640x360px" 
                                         artwork={episodeArtworks.find(a => a.artwork_type === 'thumbnail')} 
                                         onUpload={(file) => uploadArtwork('thumbnail', file)} 
+                                        onDelete={() => {
+                                            const art = episodeArtworks.find(a => a.artwork_type === 'thumbnail');
+                                            if (art) deleteArtwork(art.id);
+                                        }}
                                     />
                                 </div>
                               </div>
@@ -552,26 +571,38 @@ const Dashboard: React.FC = () => {
 };
 
 // 3-Slot Artwork Component
-const ArtworkSlot: React.FC<{type: string, label: string, dimensions: string, artwork?: Artwork, onUpload: (f: File) => void}> = ({type, label, dimensions, artwork, onUpload}) => {
+const ArtworkSlot: React.FC<{type: string, label: string, dimensions: string, artwork?: Artwork, onUpload: (f: File) => Promise<void>, onDelete?: () => void}> = ({type, label, dimensions, artwork, onUpload, onDelete}) => {
     const [preview, setPreview] = useState<string | null>(null);
     const fileRef = useRef<HTMLInputElement>(null);
 
-    const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
             setPreview(URL.createObjectURL(file));
-            onUpload(file);
+            try {
+                await onUpload(file);
+            } catch (err) {
+                setPreview(null); // Clear preview on upload failure
+            }
         }
     };
 
     return (
-        <div style={{ background: '#27272a', padding: '0.75rem', borderRadius: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', position: 'relative', border: '1px solid #52525b' }}>
+        <div style={{ background: '#27272a', padding: '1rem', borderRadius: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.75rem', position: 'relative', border: '1px solid #52525b' }}>
+            {artwork && onDelete && (
+                <button 
+                    onClick={(e) => { e.stopPropagation(); onDelete(); setPreview(null); }} 
+                    style={{ position: 'absolute', top: '0.5rem', right: '0.5rem', background: 'rgba(239, 68, 68, 0.9)', padding: '0.25rem', borderRadius: '4px', zIndex: 10, border: 'none', cursor: 'pointer' }}
+                    title="Delete Artwork"
+                >
+                    <Trash2 size={14} color="white" />
+                </button>
+            )}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div>
                     <h5 style={{ margin: 0, color: 'white', fontWeight: 500 }}>{label}</h5>
                     <span style={{ fontSize: '0.75rem', color: '#9ca3af' }}>{dimensions}</span>
                 </div>
-                {artwork ? <CheckCircle2 size={16} color="#34d399" /> : <X size={16} color="#f87171" />}
             </div>
             
             <div style={{ 

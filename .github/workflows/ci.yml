@@ -63,3 +63,13 @@ jobs:
 
       - name: Validate Docker Compose Configuration
         run: docker compose config
+
+  deploy:
+    needs: [backend-checks, frontend-checks, docker-compose-check]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mock Deploy Step
+        run: |
+          echo "Deploying to production..."
+          echo "In a real scenario, this step would build the Docker images, tag them with the commit SHA,"
+          echo "push them to a container registry like AWS ECR, and update the ECS task definitions."

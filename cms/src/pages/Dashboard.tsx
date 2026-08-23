@@ -1,9 +1,10 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   UploadCloud, Eye, Search, 
   Image as ImageIcon, Film, Layers, X, Clock, Globe, Edit2, 
   Plus, ChevronLeft, ChevronRight, Upload, Trash2
 } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../api';
 
 interface Show {
@@ -36,10 +37,24 @@ interface Artwork {
   height_px: number;
 }
 
+const fetchShowsData = async ({ queryKey }: any) => {
+  const [_key, { page, limit, filterSection, filterStatus, search }] = queryKey;
+  const params = new URLSearchParams();
+  params.append('skip', (page * limit).toString());
+  params.append('limit', limit.toString());
+  if (filterSection) params.append('section', filterSection);
+  if (filterStatus) params.append('status', filterStatus);
+
+  const response = await api.get(`/admin/shows?${params.toString()}`);
+  let fetchedShows = Array.isArray(response.data) ? response.data : [];
+  if (search) {
+      fetchedShows = fetchedShows.filter((s: any) => (s.title || '').toLowerCase().includes(search.toLowerCase()));
+  }
+  return fetchedShows;
+};
+
 const Dashboard: React.FC = () => {
-  const [shows, setShows] = useState<Show[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isPublishing, setIsPublishing] = useState(false);
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   
   // Filters & Pagination
@@ -77,31 +92,10 @@ const Dashboard: React.FC = () => {
 
   const role = localStorage.getItem('userRole') || 'admin';
 
-  const fetchShows = async () => {
-    setIsLoading(true);
-    try {
-      const params = new URLSearchParams();
-      params.append('skip', (page * limit).toString());
-      params.append('limit', limit.toString());
-      if (filterSection) params.append('section', filterSection);
-      if (filterStatus) params.append('status', filterStatus);
-
-      const response = await api.get(`/admin/shows?${params.toString()}`);
-      let fetchedShows = Array.isArray(response.data) ? response.data : [];
-      if (search) {
-          fetchedShows = fetchedShows.filter(s => (s.title || '').toLowerCase().includes(search.toLowerCase()));
-      }
-      setShows(fetchedShows);
-    } catch (err: any) {
-      console.error('Failed to fetch shows', err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchShows();
-  }, [page, filterSection, filterStatus, search]);
+  const { data: shows = [], isLoading, refetch: fetchShows } = useQuery({
+    queryKey: ['shows', { page, limit, filterSection, filterStatus, search }],
+    queryFn: fetchShowsData,
+  });
 
   const openShowDetails = async (show: Show) => {
     setSelectedShow(show);
@@ -125,17 +119,22 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const publishMutation = useMutation({
+    mutationFn: async () => {
+      await api.post('/admin/catalog/publish');
+    },
+    onSuccess: () => {
+      alert('Published successfully!');
+      queryClient.invalidateQueries({ queryKey: ['publishHistory'] });
+    },
+    onError: (err: any) => {
+      alert(err.response?.data?.detail || 'Failed to publish catalog.');
+    }
+  });
+
   const handlePublish = async () => {
     if (!window.confirm('Are you sure you want to publish the catalog?')) return;
-    setIsPublishing(true);
-    try {
-      await api.post('/admin/catalog/publish');
-      alert('Published successfully!');
-    } catch (err: any) {
-      alert(err.response?.data?.detail || 'Failed to publish catalog.');
-    } finally {
-      setIsPublishing(false);
-    }
+    publishMutation.mutate();
   };
 
   const fetchHistory = async () => {
@@ -281,8 +280,8 @@ const Dashboard: React.FC = () => {
         <div className="flex gap-4 items-center">
           <button onClick={() => setIsCreateShowOpen(true)} className="btn btn-secondary"><Plus size={18} /> New Show</button>
           <button onClick={toggleHistory} className="btn btn-secondary"><Clock size={18} /> {isHistoryExpanded ? 'Close History' : 'Publish History'}</button>
-          <button onClick={handlePublish} disabled={isPublishing || role !== 'admin'} className="btn btn-primary">
-            <UploadCloud size={18} /> {isPublishing ? 'Publishing...' : 'Publish Live Catalog'}
+          <button onClick={handlePublish} disabled={publishMutation.isPending || role !== 'admin'} className="btn btn-primary">
+            <UploadCloud size={18} /> {publishMutation.isPending ? 'Publishing...' : 'Publish Live Catalog'}
           </button>
         </div>
       </div>

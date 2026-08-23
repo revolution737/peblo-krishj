@@ -11,15 +11,27 @@ from app.storage.local import storage
 
 router = APIRouter(prefix="/catalog", tags=["catalog"])
 
-@router.get("/", response_model=CatalogResponse)
-async def get_catalog():
+_CATALOG_CACHE = None
+_CACHE_MTIME = 0.0
+
+async def get_cached_catalog():
+    global _CATALOG_CACHE, _CACHE_MTIME
     live_path = os.path.join(storage.base_path, "catalogue.json")
     if not os.path.exists(live_path):
         return {"published_at": None, "version": None, "sections": []}
         
-    async with aiofiles.open(live_path, "r") as f:
-        data = await f.read()
-        return json.loads(data)
+    mtime = os.path.getmtime(live_path)
+    if _CATALOG_CACHE is None or mtime > _CACHE_MTIME:
+        async with aiofiles.open(live_path, "r") as f:
+            data = await f.read()
+            _CATALOG_CACHE = json.loads(data)
+            _CACHE_MTIME = mtime
+            
+    return _CATALOG_CACHE
+
+@router.get("/", response_model=CatalogResponse)
+async def get_catalog():
+    return await get_cached_catalog()
 
 @router.get("/search", response_model=CatalogResponse)
 async def search_catalog(
@@ -29,16 +41,11 @@ async def search_catalog(
     section: Optional[str] = None
 ):
     # This is a naive in-memory search over the published catalogue.
-    # In production, this would be a DB query with pg_trgm or Elasticsearch.
-    # We load the JSON and filter it.
+    # We now cache the JSON in memory and filter it.
     
-    live_path = os.path.join(storage.base_path, "catalogue.json")
-    if not os.path.exists(live_path):
-        return {"published_at": None, "version": None, "sections": []}
-        
-    async with aiofiles.open(live_path, "r") as f:
-        data = await f.read()
-        catalog = json.loads(data)
+    catalog = await get_cached_catalog()
+    if not catalog.get("sections"):
+        return catalog
         
     q = q.lower() if q else None
     

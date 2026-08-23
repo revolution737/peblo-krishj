@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { AlertTriangle, CheckCircle2, RefreshCw, XCircle } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import api from '../api';
 
 interface IssueItem {
@@ -24,27 +25,18 @@ interface ValidationReportData {
   };
 }
 
+const fetchReportData = async (): Promise<ValidationReportData> => {
+  const response = await api.get('/admin/validation-report');
+  return response.data;
+};
+
 const ValidationReport: React.FC = () => {
-  const [report, setReport] = useState<ValidationReportData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState('');
+  const { data: report, isLoading, error, refetch } = useQuery({
+    queryKey: ['validationReport'],
+    queryFn: fetchReportData,
+  });
 
-  const fetchReport = async () => {
-    setIsLoading(true);
-    setError('');
-    try {
-      const response = await api.get('/admin/validation-report');
-      setReport(response.data);
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to load validation report.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchReport();
-  }, []);
+  const errorMessage = error instanceof Error ? error.message : (error as any)?.response?.data?.detail || 'Failed to load validation report.';
 
   return (
     <div className="animate-fade-in">
@@ -55,7 +47,7 @@ const ValidationReport: React.FC = () => {
             Automated integrity auditor inspecting missing artwork, null sections, drafts, and casing discrepancies.
           </p>
         </div>
-        <button onClick={fetchReport} className="btn btn-secondary" disabled={isLoading}>
+        <button onClick={() => refetch()} className="btn btn-secondary" disabled={isLoading}>
           <RefreshCw size={18} className={isLoading ? 'loader' : ''} style={{ animation: isLoading ? 'spin 1s linear infinite' : 'none', border: 'none' }} />
           Run Audit
         </button>
@@ -63,7 +55,7 @@ const ValidationReport: React.FC = () => {
 
       {error && (
         <div className="glass-card mb-8" style={{ borderColor: 'rgba(239, 68, 68, 0.3)', background: 'rgba(239, 68, 68, 0.05)' }}>
-          <p style={{ color: '#fca5a5', margin: 0 }}>{error}</p>
+          <p style={{ color: '#fca5a5', margin: 0 }}>{errorMessage}</p>
         </div>
       )}
 

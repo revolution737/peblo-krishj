@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { AlertCircle } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import api from '../api';
 
 interface AuditLog {
@@ -12,24 +13,18 @@ interface AuditLog {
   created_at: string;
 }
 
-const AuditLogs: React.FC = () => {
-  const [logs, setLogs] = useState<AuditLog[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+const fetchAuditLogs = async (): Promise<AuditLog[]> => {
+  const res = await api.get('/admin/audit-logs');
+  return res.data.logs;
+};
 
-  useEffect(() => {
-    const fetchLogs = async () => {
-      try {
-        const res = await api.get('/admin/audit-logs');
-        setLogs(res.data.logs);
-      } catch (err: any) {
-        setError(err.response?.data?.detail || 'Failed to fetch audit logs');
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchLogs();
-  }, []);
+const AuditLogs: React.FC = () => {
+  const { data: logs = [], isLoading: loading, error } = useQuery({
+    queryKey: ['auditLogs'],
+    queryFn: fetchAuditLogs,
+  });
+
+  const errorMessage = error instanceof Error ? error.message : (error as any)?.response?.data?.detail || 'Failed to fetch audit logs';
 
   return (
     <div className="animate-fade-in">
@@ -47,7 +42,7 @@ const AuditLogs: React.FC = () => {
           <h3 style={{ color: '#ef4444', margin: '0 0 0.5rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <AlertCircle size={18} /> Error Loading Logs
           </h3>
-          <p style={{ margin: 0, color: 'var(--text-secondary)' }}>{error}</p>
+          <p style={{ margin: 0, color: 'var(--text-secondary)' }}>{errorMessage}</p>
         </div>
       )}
 

@@ -13,33 +13,19 @@ The system is designed to be brought up quickly using Docker Compose. The compos
 - Docker & Docker Compose (`docker compose`)
 - Node.js 18+ & npm
 
-### Step 1: Start the Backend Pipeline
+### Step 1: Start the Entire Platform
 ```bash
 # This brings up the Postgres DB, FastAPI backend, and runs the seed script automatically.
+# It also builds and serves the CMS and Viewer UIs via multi-stage Nginx containers.
 docker compose up -d --build
 ```
 - **API Docs (Swagger):** [http://localhost:8000/docs](http://localhost:8000/docs)
-- **Health Check:** [http://localhost:8000/health](http://localhost:8000/health)
+- **CMS URL:** [http://localhost:3000](http://localhost:3000)
+- **Viewer URL:** [http://localhost:3001](http://localhost:3001)
 
 *Note: The database seeds automatically with two default users:*
 - **Admin**: `admin@peblo.tv` / `admin123` (Full CMS CRUD + Publish/Rollback rights)
 - **Editor**: `editor@peblo.tv` / `editor123` (CMS CRUD only)
-
-### Step 2: Start the CMS Frontend
-```bash
-cd cms
-npm ci
-npm run dev
-```
-- **CMS URL:** [http://localhost:5173](http://localhost:5173)
-
-### Step 3: Start the Viewer UI
-```bash
-cd viewer
-npm ci
-npm run dev
-```
-- **Viewer URL:** [http://localhost:5174](http://localhost:5174)
 
 ---
 
@@ -78,6 +64,18 @@ Search is implemented directly in the React frontend (and a separate backend fil
 **Pre-published Catalogue vs. Database Queries Per Request**
 *Why pre-publish?* The Viewer UI traffic pattern is heavily read-oriented and experiences massive spikes. Serving a static `catalogue.json` drastically reduces database load. A static file can be served via a CDN directly from the edge, achieving near-infinite scalability and sub-10ms response times with zero database queries.
 *Where it bites us:* It creates an eventual consistency hurdle. Editors must explicitly remember to hit "Publish", and there is a natural delay between saving a change in the CMS and a user seeing it on their TV.
+
+### Deployment Strategy
+For a real production environment, the `deploy` step in our CI/CD pipeline would trigger after successful checks. It would:
+1. Build the multi-stage Docker images for the API, CMS, and Viewer.
+2. Tag the images with the Git commit SHA.
+3. Push them to a container registry like AWS ECR.
+4. Update ECS Task Definitions to point to the new images and force a rolling deployment.
+5. Apply database migrations via a standalone migration task before routing traffic to new API instances.
+
+### Alerting Strategy
+**Metric:** Alert on a spike in 5xx HTTP errors from the backend API.
+**Reasoning:** If the backend starts throwing 5xx errors, it indicates a critical failure such as database connection loss, disk full (storage abstraction failure), or unhandled exceptions in the publish job. This directly impacts the core capability of the editors to publish content and needs immediate engineering attention.
 
 ### Part E: Optional Stretch Goals & AI Usage
 **What was left out and why? AI usage?**

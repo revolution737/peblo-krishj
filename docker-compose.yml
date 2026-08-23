@@ -42,26 +42,20 @@ services:
   cms:
     build:
       context: ./cms
+      args:
+        - VITE_API_URL=http://localhost:8000
     ports:
-      - "5173:5173"
-    environment:
-      - VITE_API_URL=http://localhost:8000
-    volumes:
-      - ./cms:/app
-      - /app/node_modules
+      - "3000:80"
     depends_on:
       - backend
 
   viewer:
     build:
       context: ./viewer
+      args:
+        - VITE_API_URL=http://localhost:8000
     ports:
-      - "5174:5174"
-    environment:
-      - VITE_API_URL=http://localhost:8000
-    volumes:
-      - ./viewer:/app
-      - /app/node_modules
+      - "3001:80"
     depends_on:
       - backend
 

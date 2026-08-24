@@ -5,7 +5,6 @@ import uuid
 
 from app.database import get_db
 from app.models.episode import Episode
-from app.models.artwork import Artwork
 from app.schemas.common import EpisodeCreate, EpisodeUpdate, EpisodeResponse
 from app.auth.dependencies import require_editor
 from app.services.validation import validate_episode_publishable

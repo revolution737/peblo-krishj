@@ -1,13 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from sqlalchemy.orm import selectinload
 
 from app.database import get_db
-from app.models.show import Show
-from app.models.season import Season
-from app.models.episode import Episode
-from app.models.artwork import Artwork
 from app.models.publish_run import PublishRun
 from app.models.audit_log import AuditLog
 from app.models.user import User

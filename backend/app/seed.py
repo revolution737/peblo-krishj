@@ -92,17 +92,8 @@ async def seed_db():
             show = shows_cache[row["slug"]]
             season = seasons_cache[(row["slug"], row["season_number"])]
             
-            # Check unique constraint (content_group, language) before insert to gracefully handle `ep_9001`
-            ep_res = await session.execute(
-                select(Episode).where(
-                    Episode.content_group == row["content_group"], 
-                    Episode.language == row["language"]
-                )
-            )
-            if ep_res.scalar_one_or_none():
-                print(f"Skipping duplicate episode for {row['content_group']} in {row['language']} (Rule 2 check).")
-                continue
-                
+            from sqlalchemy.exc import IntegrityError
+            
             ep = Episode(
                 show_id=show.id,
                 season_id=season.id,
@@ -114,7 +105,16 @@ async def seed_db():
                 status="published" if row["status"] == "published" else "draft",
                 original_episode_id=row["episode_id"]
             )
-            session.add(ep)
+            
+            try:
+                # Catch the IntegrityError natively via a nested transaction (SAVEPOINT)
+                async with session.begin_nested():
+                    session.add(ep)
+                    await session.flush()
+            except IntegrityError:
+                print(f"Skipping duplicate episode for {row['content_group']} in {row['language']} (caught IntegrityError natively).")
+                continue
+                
             await session.commit()
             await session.refresh(ep)
             

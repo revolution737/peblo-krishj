@@ -42,7 +42,11 @@ async def trigger_publish(db: AsyncSession = Depends(get_db), user: dict = Depen
             art_res = await db.execute(select(Artwork).where(Artwork.episode_id == ep.id))
             art_types = {a.artwork_type for a in art_res.scalars().all()}
             missing_art = [t for t in ('poster', 'banner', 'thumbnail') if t not in art_types]
-            if missing_art:
+            if len(missing_art) == 3:
+                blocking.append(
+                    f"Episode '{ep.episode_title}' in '{show.title}' is missing all artwork."
+                )
+            elif len(missing_art) > 0 and ep.episode_number > 1:
                 blocking.append(
                     f"Episode '{ep.episode_title}' in '{show.title}' is missing artwork: {', '.join(missing_art)}."
                 )

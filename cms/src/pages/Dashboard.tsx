@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { 
   UploadCloud, Eye, Search, 
   Image as ImageIcon, Film, Layers, X, Clock, Globe, Edit2, 
@@ -51,45 +51,51 @@ interface Toast {
 // ─────────────────────────────────────────────────────────────
 let _toastId = 0;
 
-const ToastContainer: React.FC<{ toasts: Toast[]; onDismiss: (id: number) => void }> = ({ toasts, onDismiss }) => (
-  <div style={{
-    position: 'fixed', bottom: '2rem', right: '2rem',
-    display: 'flex', flexDirection: 'column', gap: '0.75rem',
-    zIndex: 9999, pointerEvents: 'none'
-  }}>
-    {toasts.map(t => (
-      <div key={t.id} style={{
-        display: 'flex', alignItems: 'center', gap: '0.75rem',
-        padding: '1rem 1.25rem',
-        background: t.type === 'success' ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)',
-        border: `1px solid ${t.type === 'success' ? 'rgba(16,185,129,0.4)' : 'rgba(239,68,68,0.4)'}`,
-        borderRadius: '12px',
-        color: 'var(--text-primary)',
-        fontSize: '0.9rem',
-        backdropFilter: 'blur(8px)',
-        boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
-        animation: 'slideInRight 0.25s ease',
-        pointerEvents: 'auto',
-        maxWidth: '380px',
-        minWidth: '260px',
-      }}>
-        {t.type === 'success'
-          ? <CheckCircle2 size={18} color="#10b981" style={{ flexShrink: 0 }} />
-          : <AlertCircle size={18} color="#ef4444" style={{ flexShrink: 0 }} />}
-        <span style={{ flex: 1 }}>{t.text}</span>
-        <button onClick={() => onDismiss(t.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', padding: '2px' }}>
-          <X size={14} />
-        </button>
-      </div>
-    ))}
-  </div>
-);
+import { createPortal } from 'react-dom';
+
+const ToastContainer: React.FC<{ toasts: Toast[]; onDismiss: (id: number) => void }> = ({ toasts, onDismiss }) => {
+  if (typeof document === 'undefined') return null;
+  return createPortal(
+    <div style={{
+      position: 'fixed', bottom: '2rem', right: '2rem',
+      display: 'flex', flexDirection: 'column', gap: '0.75rem',
+      zIndex: 9999, pointerEvents: 'none'
+    }}>
+      {toasts.map(t => (
+        <div key={t.id} style={{
+          display: 'flex', alignItems: 'center', gap: '0.75rem',
+          padding: '1rem 1.25rem',
+          background: t.type === 'success' ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)',
+          border: `1px solid ${t.type === 'success' ? 'rgba(16,185,129,0.4)' : 'rgba(239,68,68,0.4)'}`,
+          borderRadius: '12px',
+          color: 'var(--text-primary)',
+          fontSize: '0.9rem',
+          backdropFilter: 'blur(8px)',
+          boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
+          animation: 'slideInRight 0.25s ease',
+          pointerEvents: 'auto',
+          maxWidth: '380px',
+          minWidth: '260px',
+        }}>
+          {t.type === 'success'
+            ? <CheckCircle2 size={18} color="#10b981" style={{ flexShrink: 0 }} />
+            : <AlertCircle size={18} color="#ef4444" style={{ flexShrink: 0 }} />}
+          <span style={{ flex: 1 }}>{t.text}</span>
+          <button onClick={() => onDismiss(t.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', padding: '2px' }}>
+            <X size={14} />
+          </button>
+        </div>
+      ))}
+    </div>,
+    document.body
+  );
+};
 
 // ─────────────────────────────────────────────────────────────
 // Data fetcher
 // ─────────────────────────────────────────────────────────────
 const fetchShowsData = async ({ queryKey }: any) => {
-  const [_key, { page, limit, filterSection, filterStatus, filterLanguage, search }] = queryKey;
+  const [_key, { page, limit, filterSection, filterStatus, search }] = queryKey;
   const params = new URLSearchParams();
   params.append('skip', (page * limit).toString());
   params.append('limit', limit.toString());
@@ -183,6 +189,13 @@ const Dashboard: React.FC = () => {
       if (filterLanguage) {
         episodes = episodes.filter((ep: Episode) => ep.language === filterLanguage);
       }
+      
+      episodes.sort((a: Episode, b: Episode) => {
+        if (a.content_group < b.content_group) return -1;
+        if (a.content_group > b.content_group) return 1;
+        return 0;
+      });
+
       setShowEpisodes(episodes);
     } catch {
       addToast('error', 'Failed to load episode details.');
@@ -594,8 +607,11 @@ const Dashboard: React.FC = () => {
                               ) : (
                                 <div>
                                   <div className="flex items-center gap-2 mb-1">
-                                    <span className="badge badge-primary">Ep {ep.episode_number}</span>
-                                    {ep.episode_number === 0 && <span className="badge badge-warning">Trailer (S0)</span>}
+                                    {ep.content_group.includes('-s00') || ep.episode_number === 0 ? (
+                                      <span className="badge badge-warning">Trailer</span>
+                                    ) : (
+                                      <span className="badge badge-primary">Ep {ep.episode_number}</span>
+                                    )}
                                     <strong className="flex items-center gap-2" style={{ fontSize: '1.1rem' }}>
                                       {ep.episode_title}
                                       <button onClick={() => { setEditingEpisodeId(ep.id); setEditingEpisode(ep); }} className="text-secondary hover:text-primary"><Edit2 size={14} /></button>

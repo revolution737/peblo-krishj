@@ -22,13 +22,19 @@ jobs:
           cd backend
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          pip install ruff
+
+      - name: Lint (ruff)
+        run: |
+          cd backend
+          ruff check app/
 
       - name: Run Tests
         env:
           STORAGE_LOCAL_PATH: ./storage
         run: |
           cd backend
-          python -m pytest tests/
+          python -m pytest tests/ -v
 
   frontend-checks:
     runs-on: ubuntu-latest
@@ -41,20 +47,26 @@ jobs:
           node-version: 20
           cache: 'npm'
           cache-dependency-path: |
-            cms/package.json
-            viewer/package.json
+            cms/package-lock.json
+            viewer/package-lock.json
+
+      - name: Install CMS dependencies
+        run: cd cms && npm ci
+
+      - name: Lint CMS (oxlint)
+        run: cd cms && npm run lint
 
       - name: Build CMS
-        run: |
-          cd cms
-          npm ci || npm install
-          npm run build
+        run: cd cms && npm run build
+
+      - name: Install Viewer dependencies
+        run: cd viewer && npm ci
+
+      - name: Lint Viewer (oxlint)
+        run: cd viewer && npm run lint
 
       - name: Build Viewer UI
-        run: |
-          cd viewer
-          npm ci || npm install
-          npm run build
+        run: cd viewer && npm run build
 
   docker-compose-check:
     runs-on: ubuntu-latest
@@ -67,9 +79,38 @@ jobs:
   deploy:
     needs: [backend-checks, frontend-checks, docker-compose-check]
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:
-      - name: Mock Deploy Step
+      - uses: actions/checkout@v4
+
+      - name: Build and tag Docker images
         run: |
-          echo "Deploying to production..."
-          echo "In a real scenario, this step would build the Docker images, tag them with the commit SHA,"
-          echo "push them to a container registry like AWS ECR, and update the ECS task definitions."
+          IMAGE_TAG=${{ github.sha }}
+          echo "Building images with tag: $IMAGE_TAG"
+          docker build -t peblo-backend:$IMAGE_TAG ./backend
+          docker build --build-arg VITE_API_URL=https://api.peblo.tv -t peblo-cms:$IMAGE_TAG ./cms
+          docker build --build-arg VITE_API_URL=https://api.peblo.tv -t peblo-viewer:$IMAGE_TAG ./viewer
+
+      - name: Push images to registry (mock — replace with real ECR push)
+        run: |
+          IMAGE_TAG=${{ github.sha }}
+          echo "In production, the following commands would run:"
+          echo "  aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin \$ECR_REGISTRY"
+          echo "  docker tag peblo-backend:$IMAGE_TAG \$ECR_REGISTRY/peblo-backend:$IMAGE_TAG"
+          echo "  docker push \$ECR_REGISTRY/peblo-backend:$IMAGE_TAG"
+          echo "  (repeat for cms and viewer images)"
+
+      - name: Apply DB migrations (mock — run before routing traffic)
+        run: |
+          echo "In production, before updating the ECS service, a one-off migration task runs:"
+          echo "  aws ecs run-task --cluster peblo-prod --task-definition peblo-migrate --overrides ..."
+          echo "  This ensures DB schema is current before new API pods receive traffic."
+
+      - name: Update ECS services (mock)
+        run: |
+          IMAGE_TAG=${{ github.sha }}
+          echo "In production:"
+          echo "  aws ecs update-service --cluster peblo-prod --service peblo-backend --force-new-deployment"
+          echo "  aws ecs update-service --cluster peblo-prod --service peblo-cms    --force-new-deployment"
+          echo "  aws ecs update-service --cluster peblo-prod --service peblo-viewer --force-new-deployment"
+          echo "ECS performs a rolling deployment; old tasks stay healthy until new ones pass health checks."

@@ -9,6 +9,7 @@ from app.database import AsyncSessionLocal
 
 from app.config import settings
 from app.routers import auth, artwork, shows, seasons, episodes, admin, catalog
+from app.routers.seasons import flat_seasons_router
 
 app = FastAPI(title="Peblo TV API")
 
@@ -27,6 +28,7 @@ app.include_router(auth.router)
 app.include_router(artwork.router)
 app.include_router(shows.router)
 app.include_router(seasons.router)
+app.include_router(flat_seasons_router)
 app.include_router(episodes.router)
 app.include_router(admin.router)
 app.include_router(catalog.router)

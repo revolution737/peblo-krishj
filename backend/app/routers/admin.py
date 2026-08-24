@@ -24,6 +24,40 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 
 @router.post("/catalog/publish")
 async def trigger_publish(db: AsyncSession = Depends(get_db), user: dict = Depends(require_admin)):
+    # --- Server-side validation gate ---
+    # Mirror the validation report logic: block publish if any published
+    # show/episode has missing section, duration, or artwork.
+    shows_res = await db.execute(select(Show).where(Show.status == "published"))
+    published_shows = shows_res.scalars().all()
+
+    blocking = []
+    for show in published_shows:
+        if not show.section:
+            blocking.append(f"Show '{show.title}' is published but has no section assigned.")
+            continue
+        ep_res = await db.execute(select(Episode).where(Episode.show_id == show.id, Episode.status == "published"))
+        for ep in ep_res.scalars().all():
+            if ep.duration_seconds is None:
+                blocking.append(f"Episode '{ep.episode_title}' in '{show.title}' is missing a duration.")
+            art_res = await db.execute(select(Artwork).where(Artwork.episode_id == ep.id))
+            art_types = {a.artwork_type for a in art_res.scalars().all()}
+            missing_art = [t for t in ('poster', 'banner', 'thumbnail') if t not in art_types]
+            if missing_art:
+                blocking.append(
+                    f"Episode '{ep.episode_title}' in '{show.title}' is missing artwork: {', '.join(missing_art)}."
+                )
+
+    if blocking:
+        from fastapi import HTTPException as _HTTPException
+        raise _HTTPException(
+            status_code=400,
+            detail={
+                "message": "Cannot publish: blocking issues must be resolved first.",
+                "issues": blocking,
+            }
+        )
+    # --- End validation gate ---
+
     run = await publish_catalogue(db, user["id"])
     await log_audit_event(db, user_id=uuid.UUID(user["id"]), action="PUBLISH", target_type="CATALOG", target_id=str(run.id), details={"shows": run.show_count, "episodes": run.episode_count})
     await db.commit()

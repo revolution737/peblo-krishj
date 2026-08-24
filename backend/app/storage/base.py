@@ -5,7 +5,7 @@ class StorageBackend(ABC):
 
     @abstractmethod
     async def save(self, path: str, data: bytes) -> str:
-        """Saves data to the given path and returns the final path."""
+        """Saves binary data to the given path and returns the final path."""
         pass
 
     @abstractmethod
@@ -21,4 +21,20 @@ class StorageBackend(ABC):
     @abstractmethod
     async def get_url(self, path: str) -> str:
         """Gets a serving URL for the given path."""
+        pass
+
+    @abstractmethod
+    async def save_text(self, path: str, text: str) -> str:
+        """Saves a UTF-8 text string to the given path and returns the final path."""
+        pass
+
+    @abstractmethod
+    async def copy(self, src_path: str, dst_path: str) -> None:
+        """Copies a file from src_path to dst_path within the same backend."""
+        pass
+
+    @abstractmethod
+    async def atomic_replace(self, src_path: str, dst_path: str) -> None:
+        """Atomically replaces dst_path with src_path (os.replace semantics on local disk,
+        copy+delete on object stores that lack native rename)."""
         pass

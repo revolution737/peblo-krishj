@@ -87,9 +87,9 @@ I successfully implemented both optional stretch goals to make the platform high
 
 ## ⏱ 3. Time Spent Breakdown
 
-- **Part A: Backend Scaffolding, DB Models, & Seeding:** 1 hour
-- **Part B: CMS API, Auth, Image Validation, & React Frontend:** 2 hours
-- **Part C: Atomic Publish Job & Storage Abstraction:** 1 hour
+- **Part A: Backend Scaffolding, DB Models, & Seeding:** 1 hour 30 minutes
+- **Part B: CMS API, Auth, Image Validation, & React Frontend:** 3 hours
+- **Part C: Atomic Publish Job & Storage Abstraction:** 2 hours
 - **Part D: Viewer UI (Netflix Style Frontend):** 45 minutes
-- **Part E: CI/CD, Documentation & Trade-off Analysis:** 30 minutes
+- **Part E: CI/CD, Documentation & Trade-off Analysis:** 1 hour
 - **Optional Stretch Goals (Rollback & Audit Logs):** 1 hour

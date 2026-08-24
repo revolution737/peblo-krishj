@@ -179,8 +179,8 @@ async def test_season_0_marked_as_trailer():
     with patch("app.services.publish.storage") as mock_storage:
         mock_storage.get_url = AsyncMock(return_value="/storage/dummy.jpg")
         mock_storage.save_text = AsyncMock(side_effect=lambda p, t: written_texts.update({p: t}) or p)
-        mock_storage.copy = AsyncMock()
-        mock_storage.atomic_replace = AsyncMock()
+        mock_storage.copy = AsyncMock(side_effect=lambda src, dst: written_texts.update({dst: written_texts.get(src, "")}))
+        mock_storage.atomic_replace = AsyncMock(side_effect=lambda src, dst: written_texts.update({dst: written_texts.get(src, "")}))
 
         run = await publish_catalogue(db, uuid.uuid4())
 
@@ -219,8 +219,8 @@ async def test_unpublished_episodes_excluded():
     with patch("app.services.publish.storage") as mock_storage:
         mock_storage.get_url = AsyncMock(return_value="")
         mock_storage.save_text = AsyncMock(side_effect=lambda p, t: written_texts.update({p: t}) or p)
-        mock_storage.copy = AsyncMock()
-        mock_storage.atomic_replace = AsyncMock()
+        mock_storage.copy = AsyncMock(side_effect=lambda src, dst: written_texts.update({dst: written_texts.get(src, "")}))
+        mock_storage.atomic_replace = AsyncMock(side_effect=lambda src, dst: written_texts.update({dst: written_texts.get(src, "")}))
 
         run = await publish_catalogue(db, uuid.uuid4())
 
@@ -270,8 +270,8 @@ async def test_show_without_section_skipped():
     with patch("app.services.publish.storage") as mock_storage:
         mock_storage.get_url = AsyncMock(return_value="")
         mock_storage.save_text = AsyncMock(side_effect=lambda p, t: written_texts.update({p: t}) or p)
-        mock_storage.copy = AsyncMock()
-        mock_storage.atomic_replace = AsyncMock()
+        mock_storage.copy = AsyncMock(side_effect=lambda src, dst: written_texts.update({dst: written_texts.get(src, "")}))
+        mock_storage.atomic_replace = AsyncMock(side_effect=lambda src, dst: written_texts.update({dst: written_texts.get(src, "")}))
 
         run = await publish_catalogue(db, uuid.uuid4())
 
@@ -312,8 +312,8 @@ async def test_languages_sorted_deterministically():
     with patch("app.services.publish.storage") as mock_storage:
         mock_storage.get_url = AsyncMock(return_value="")
         mock_storage.save_text = AsyncMock(side_effect=lambda p, t: written_texts.update({p: t}) or p)
-        mock_storage.copy = AsyncMock()
-        mock_storage.atomic_replace = AsyncMock()
+        mock_storage.copy = AsyncMock(side_effect=lambda src, dst: written_texts.update({dst: written_texts.get(src, "")}))
+        mock_storage.atomic_replace = AsyncMock(side_effect=lambda src, dst: written_texts.update({dst: written_texts.get(src, "")}))
 
         await publish_catalogue(db, uuid.uuid4())
 

@@ -39,5 +39,5 @@ async def health_check():
         async with AsyncSessionLocal() as session:
             await session.execute(text("SELECT 1"))
         return {"status": "healthy", "db": "connected"}
-    except Exception as e:
+    except Exception:
         return JSONResponse(status_code=503, content={"status": "unhealthy", "db": "disconnected"})

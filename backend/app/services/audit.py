@@ -1,6 +1,5 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 import uuid
-from typing import Optional
 from app.models.audit_log import AuditLog
 
 async def log_audit_event(

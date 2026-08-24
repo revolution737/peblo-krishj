@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends, File, UploadFile, Form, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Optional
 from sqlalchemy import select
 from PIL import Image
 import io
@@ -182,4 +181,3 @@ async def delete_artwork(
         details={"type": artwork.artwork_type}
     )
     await db.commit()
-    return

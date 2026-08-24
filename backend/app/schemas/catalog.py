@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Any, Optional
+from typing import Any
 
 class CatalogResponse(BaseModel):
     published_at: str | None

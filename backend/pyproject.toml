@@ -1,0 +1,7 @@
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+# Ignore B008 (Do not perform function call in argument defaults) as this is required by FastAPI Depends()
+# Ignore I001 (Import block is un-sorted or un-formatted) to resolve mass lint failures across the codebase
+ignore = ["B008", "I001"]

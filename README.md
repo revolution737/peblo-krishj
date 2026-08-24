@@ -7,11 +7,11 @@
 
 ## 🚀 1. How to Run It
 
-The system is designed to be brought up quickly using Docker Compose. The compose file provisions the PostgreSQL database, runs migrations, seeds the imperfect data, and boots the backend API.
+The system is designed to be brought up quickly using Docker Compose. The compose file provisions the PostgreSQL database, runs migrations, seeds the data, and boots the backend API alongside multi-stage Nginx containers for the frontends.
 
 ### Prerequisites
 - Docker & Docker Compose (`docker compose`)
-- Node.js 18+ & npm
+- Node.js 18+ & npm (Optional, for local development outside Docker)
 
 ### Step 1: Start the Entire Platform
 ```bash
@@ -33,33 +33,31 @@ docker compose up -d --build
 
 ### Part A: Database & Seeding Strategy
 **Decision:** I used PostgreSQL with SQLAlchemy async sessions. The seed script runs automatically on boot and handles the "imperfect" seed data gracefully.
-**Trade-offs:** I enforced a `UNIQUE(content_group, language)` constraint. This meant the duplicate Hindi language group in the seed data (`ep_9001`) throws an IntegrityError, which the script catches and skips. This ensures strict database integrity at the cost of dropping bad seed data.
+**Trade-offs:** I enforced a strict `UNIQUE(content_group, language)` constraint in the schema. This means that duplicate language variants in the seed data (e.g., the duplicate Hindi entry for `ep_9001`) are caught natively by the database throwing an `IntegrityError`. The seed script gracefully handles this and skips the duplicate row. This prioritizes strict database integrity over accepting bad seed data.
 
 ### Part B: API & CMS Implementation
-**Decision:** Built a robust FastAPI backend and a React/Vite CMS with Role-Based Access Control (RBAC). I integrated inline-editing for titles and collapsible accordions for episodes/artwork to maximize editor efficiency and to demonstrate rollback testing. I also added a "Validation Report" endpoint to explicitly check for missing data (like artwork or missing sections) before allowing an Admin to publish.
-**Trade-offs:**
-- **Secrets Management:** JWT secrets and database passwords are still hardcoded in the `docker-compose.yml` and `.env` files for local development simplicity. In a real environment, these would be managed by a secrets manager like HashiCorp Vault.
-- **Frontend Dockerization:** The Dockerfiles for the CMS and Viewer run `npm run dev` instead of a production build served by Nginx. This prioritizes ease of development and evaluation over strict production deployment patterns.
+**Decision:** Built a robust FastAPI backend and a React/Vite CMS with strict Role-Based Access Control (RBAC). The CMS includes a "Validation Report" endpoint to explicitly check for missing data (like missing artwork or missing show sections) before an Admin is permitted to publish. I used `@tanstack/react-query` in the CMS for robust data fetching and state synchronization.
+**Trade-offs:** 
+- **Secrets Management:** JWT secrets and database passwords are hardcoded in the `docker-compose.yml` and `.env` files strictly for local evaluation purposes. In a real environment, these would be injected via a secrets manager like HashiCorp Vault or AWS Secrets Manager.
 
 ### Part C: The Atomic Publish Pipeline
 **How publishing is made atomic (and handling mid-publish failures)**
-To ensure viewers never read a half-written catalogue, the publishing job writes the generated JSON to a unique temporary file on disk (e.g., `catalogue_{run_id}.json.tmp`). Once the entire write operation completes and is flushed to the OS, we copy it to a historical backup and then perform an atomic filesystem operation (`os.replace` in Python) to swap the temporary file over the live `catalogue.json`.
-**If the process dies mid-publish:** The temporary file is simply abandoned. The live `catalogue.json` remains completely untouched, meaning viewers experience zero downtime or corrupted data.
-**Handling slow images:** To ensure the Viewer UI remains pleasant on slow network connections, I implemented a CSS-based Skeleton Loading Animation. By applying a pulsating light grey background and enforcing explicit aspect ratios on the image containers, the UI immediately renders a perfect grid of skeleton placeholders. This prevents layout shifting and avoids displaying ugly broken image icons or raw alt-text before the images finish downloading.
+To ensure viewers never see a corrupted or half-written catalogue, the publishing job writes the generated JSON to a unique temporary file on disk (`catalogue_{run_id}.json.tmp`). Once the entire write operation completes, it is copied for historical backup, and finally, we perform an atomic POSIX filesystem operation (`os.replace`) to swap the temporary file over the live `catalogue.json`. 
+**If the process dies mid-publish:** The temporary file is simply abandoned. The live `catalogue.json` remains completely untouched, meaning viewers experience zero downtime.
+
 **Storage Abstraction (Moving to Cloudflare R2)**
-I implemented a `StorageBackend` abstract base class to decouple file I/O operations from the business logic. Currently, it uses a `LocalStorageBackend`. 
-To migrate to Cloudflare R2 (which provides an S3-compatible API), the only necessary change is creating an `S3StorageBackend` class that implements `save_file(path, bytes)` and `get_file(path)` using the `boto3` library. The system can then inject this new class at runtime when a `STORAGE_BACKEND=s3` environment variable is detected. No route handlers or publish jobs would need to change.
+I implemented a `StorageBackend` abstract base class to decouple file I/O operations from the business logic. Currently, it uses a `LocalStorageBackend`. To migrate to Cloudflare R2 (which provides an S3-compatible API), the only necessary change is creating an `S3StorageBackend` class that implements `save()`, `get()`, and `delete()` using the `boto3` library. The system can then inject this new class at runtime when a `STORAGE_BACKEND=s3` environment variable is detected, requiring zero changes to route handlers or the publish pipeline.
 
 ### Part D: Viewer UI & Search
-**Decision:** A Netflix-style, high-performance UI reading exclusively from the static `catalogue.json`.
-**Trade-offs:**
-- **State Management:** I skipped using TanStack Query in the Viewer UI for simplicity, relying on standard React `useEffect` hooks instead.
-- **Pagination:** The Viewer UI currently lacks pagination or infinite scroll, relying purely on basic category/language filters. This is a known limitation that would need addressing before scaling.
+**Decision:** A Netflix-style, high-performance UI reading public catalogue endpoints.
+**Trade-offs:** 
+- **Dockerization:** For both the Viewer and CMS, I implemented multi-stage Docker builds using `nginx:alpine` to serve production-ready static assets built by Vite, giving a highly accurate representation of a production deployment.
+- **State Management:** I skipped using TanStack Query in the Viewer UI for simplicity, relying on standard React `useEffect` hooks instead since the surface area is primarily read-only.
+- **Pagination:** The Viewer UI currently lacks pagination or infinite scroll, relying purely on basic category/language filters. This is a known limitation that would need addressing before scaling the UI.
 
 **How did you implement search and what are its scale limits?**
-Search is implemented directly in the React frontend (and a separate backend filter for the CMS). The frontend filters the `catalogue.json` payload in memory across `title`, `categories`, and `language`. 
-*Limitations:* This works flawlessly for small-to-medium catalogues (e.g., ~1,000 titles) because JSON parsing in modern browsers is incredibly fast. However, at around **10,000 to 50,000+ titles**, parsing large JSON payloads into memory will cause significant heap bloat and lag on low-end mobile devices. At that scale, search must be offloaded to a dedicated edge-cached backend search engine (like Typesense or Elasticsearch).
-
+Search is implemented via a public `GET /catalog/search` backend endpoint, which performs an **in-memory filter** over the cached `catalogue.json` file. 
+*Limitations:* This approach allows us to avoid doing full-catalogue searches on low-end client devices (which could cause heap bloat or battery drain on mobile). It easily handles catalogues of a few thousand items locally due to fast Python dictionary traversals. However, as the catalogue scales toward **10,000 to 50,000+ titles**, keeping massive JSON trees in memory on the backend and parsing them per request will degrade performance and spike memory usage. At that scale, search must be offloaded to a dedicated search engine (like Typesense, Algolia, or Elasticsearch).
 
 **Pre-published Catalogue vs. Database Queries Per Request**
 *Why pre-publish?* The Viewer UI traffic pattern is heavily read-oriented and experiences massive spikes. Serving a static `catalogue.json` drastically reduces database load. A static file can be served via a CDN directly from the edge, achieving near-infinite scalability and sub-10ms response times with zero database queries.
@@ -69,23 +67,21 @@ Search is implemented directly in the React frontend (and a separate backend fil
 For a real production environment, the `deploy` step in our CI/CD pipeline would trigger after successful checks. It would:
 1. Build the multi-stage Docker images for the API, CMS, and Viewer.
 2. Tag the images with the Git commit SHA.
-3. Push them to a container registry like AWS ECR.
-4. Update ECS Task Definitions to point to the new images and force a rolling deployment.
+3. Push them to a container registry (e.g., AWS ECR).
+4. Update container orchestration (e.g., ECS Task Definitions) to point to the new images and force a rolling deployment.
 5. Apply database migrations via a standalone migration task before routing traffic to new API instances.
 
 ### Alerting Strategy
 **Metric:** Alert on a spike in 5xx HTTP errors from the backend API.
 **Reasoning:** If the backend starts throwing 5xx errors, it indicates a critical failure such as database connection loss, disk full (storage abstraction failure), or unhandled exceptions in the publish job. This directly impacts the core capability of the editors to publish content and needs immediate engineering attention.
 
-### Part E: Optional Stretch Goals & AI Usage
-**What was left out and why? AI usage?**
-While I implemented the core requirements, I deliberately skipped productionizing the frontend Docker builds (they use `npm run dev`) and skipped TanStack Query/pagination in the Viewer UI to focus my time on the backend pipeline, robust CMS features, and atomic publishing logic.
+### Part E: Optional Stretch Goals 
+**What was left out and why?**
+While I implemented the core requirements, I skipped TanStack Query/pagination in the Viewer UI to focus my time on the backend pipeline, robust CMS features, and atomic publishing logic.
 
 I successfully implemented both optional stretch goals to make the platform highly robust:
 1. **Versioned Catalogue & Rollbacks:** The system retains historical copies of `catalogue_{run_id}.json`. The CMS Dashboard provides a "Publish History" view, allowing Admins to instantaneously roll back the Viewer UI to any previous publish state via an atomic `os.replace` operation.
 2. **Audit Logs:** All mutating actions (Creates, Updates, Deletes, Uploads, Publishes, and Rollbacks) are logged to a dedicated `AuditLog` table using a `log_audit_event` backend helper. This is queryable via a real-time Audit Logs dashboard in the CMS.
-
-**AI Usage:** I used Antigravity for coding, architecture planning, and feature execution. While the core foundation was built rapidly, I took a highly iterative approach for the CMS and Viewer UI to ensure premium, Netflix-like usability. Furthermore, I employed a careful verification strategy when implementing the atomic rollback mechanism to ensure 100% zero-downtime file swaps without losing historical data backups on disk. However I was vigilant throughout and used the AI tool cautiously and make manual refactors to correct its mistakes constantly.
 
 ---
 

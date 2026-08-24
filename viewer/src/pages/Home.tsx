@@ -61,7 +61,8 @@ const Home: React.FC = () => {
 
   const getArtwork = (item: any, type: string) => {
     const artworkPath = item?.artwork?.[type];
-    if (artworkPath) return `http://localhost:8000${artworkPath}`;
+    const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+    if (artworkPath) return `${baseUrl}${artworkPath}`;
     return '';
   };
 

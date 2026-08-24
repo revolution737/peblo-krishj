@@ -96,17 +96,15 @@ async def test_content_group_collapsing():
         c = call_count[0]
         call_count[0] += 1
 
-        if c == 0:  # PublishRun insert
-            result.scalars.return_value.all.return_value = []
-        elif c == 1:  # published shows query
+        if c == 0:  # published shows query
             result.scalars.return_value.all.return_value = [show]
-        elif c == 2:  # show artwork
+        elif c == 1:  # show artwork
             result.scalars.return_value.all.return_value = []
-        elif c == 3:  # seasons
+        elif c == 2:  # seasons
             result.scalars.return_value.all.return_value = [season]
-        elif c == 4:  # published episodes for season
+        elif c == 3:  # published episodes for season
             result.scalars.return_value.all.return_value = [ep_en, ep_hi]
-        elif c == 5:  # artwork for ep_en (representative)
+        elif c == 4:  # artwork for ep_en (representative)
             result.scalars.return_value.all.return_value = []
         else:
             result.scalars.return_value.all.return_value = []
@@ -161,12 +159,11 @@ async def test_season_0_marked_as_trailer():
         c = call_count[0]
         call_count[0] += 1
         mapping = [
-            [],                 # 0: PublishRun
-            [show],             # 1: published shows
-            [],                 # 2: show artwork
-            [season0],          # 3: seasons
-            [trailer_ep],       # 4: episodes for season 0
-            [],                 # 5: trailer ep artwork
+            [show],             # 0: published shows
+            [],                 # 1: show artwork
+            [season0],          # 2: seasons
+            [trailer_ep],       # 3: episodes for season 0
+            [],                 # 4: trailer ep artwork
         ]
         result.scalars.return_value.all.return_value = mapping[c] if c < len(mapping) else []
         return result
@@ -207,7 +204,7 @@ async def test_unpublished_episodes_excluded():
         result = MagicMock()
         c = call_count[0]
         call_count[0] += 1
-        mapping = [[], [show], [], [season], []]  # empty episodes list (draft filtered by DB)
+        mapping = [[show], [], [season], []]  # empty episodes list (draft filtered by DB)
         result.scalars.return_value.all.return_value = mapping[c] if c < len(mapping) else []
         return result
 
@@ -253,13 +250,11 @@ async def test_show_without_section_skipped():
         c = call_count[0]
         call_count[0] += 1
         mapping = [
-            [],                        # 0: PublishRun
-            [show_no_section, show_ok],# 1: published shows
-            [],                        # 2: show_no_section artwork (skipped after section check)
-            [],                        # 3: show_ok artwork
-            [season],                  # 4: seasons for show_ok
-            [ep],                      # 5: episodes
-            [],                        # 6: ep artwork
+            [show_no_section, show_ok],# 0: published shows
+            [],                        # 1: show_ok artwork
+            [season],                  # 2: seasons for show_ok
+            [ep],                      # 3: episodes
+            [],                        # 4: ep artwork
         ]
         result.scalars.return_value.all.return_value = mapping[c] if c < len(mapping) else []
         return result
@@ -302,7 +297,7 @@ async def test_languages_sorted_deterministically():
         c = call_count[0]
         call_count[0] += 1
         # Hindi first — deterministic sort should still produce ["en", "hi"]
-        mapping = [[], [show], [], [season], [ep_hi, ep_en], []]
+        mapping = [[show], [], [season], [ep_hi, ep_en], []]
         result.scalars.return_value.all.return_value = mapping[c] if c < len(mapping) else []
         return result
 

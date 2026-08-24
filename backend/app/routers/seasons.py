@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from typing import List, Optional
+from typing import Optional
 import uuid
 
 from app.database import get_db
@@ -12,7 +12,7 @@ from app.auth.dependencies import require_editor
 # Nested router: /admin/shows/{show_id}/seasons/  (REST-canonical)
 router = APIRouter(prefix="/admin/shows/{show_id}/seasons", tags=["admin/seasons"])
 
-@router.get("/", response_model=List[SeasonResponse])
+@router.get("/", response_model=list[SeasonResponse])
 async def list_seasons(show_id: uuid.UUID, db: AsyncSession = Depends(get_db), user: dict = Depends(require_editor)):
     result = await db.execute(select(Season).where(Season.show_id == show_id).order_by(Season.season_number))
     return result.scalars().all()
@@ -33,9 +33,9 @@ async def create_season(show_id: uuid.UUID, season: SeasonCreate, db: AsyncSessi
 # Flat router: /admin/seasons?show_id=  — what the CMS currently calls
 flat_seasons_router = APIRouter(prefix="/admin/seasons", tags=["admin/seasons"])
 
-@flat_seasons_router.get("/", response_model=List[SeasonResponse])
+@flat_seasons_router.get("/", response_model=list[SeasonResponse])
 async def list_seasons_flat(
-    show_id: Optional[uuid.UUID] = Query(None),
+    show_id: uuid.UUID | None = Query(None),
     db: AsyncSession = Depends(get_db),
     user: dict = Depends(require_editor)
 ):

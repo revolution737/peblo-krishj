@@ -5,7 +5,6 @@ from sqlalchemy import select
 from PIL import Image
 import io
 import uuid
-import os
 
 from app.database import get_db
 from app.models.artwork import Artwork
@@ -22,8 +21,8 @@ MAX_FILE_SIZE = 200 * 1024 # 200 KB
 async def upload_artwork(
     file: UploadFile = File(...),
     artwork_type: str = Form(...),
-    show_id: Optional[uuid.UUID] = Form(None),
-    episode_id: Optional[uuid.UUID] = Form(None),
+    show_id: uuid.UUID | None = Form(None),
+    episode_id: uuid.UUID | None = Form(None),
     db: AsyncSession = Depends(get_db),
     user: dict = Depends(require_editor)
 ):
@@ -55,7 +54,7 @@ async def upload_artwork(
     try:
         img = Image.open(io.BytesIO(file_bytes))
         width, height = img.size
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=400, detail="The file is not a valid image.")
 
     ratio = width / height
@@ -183,4 +182,4 @@ async def delete_artwork(
         details={"type": artwork.artwork_type}
     )
     await db.commit()
-    return None
+    return

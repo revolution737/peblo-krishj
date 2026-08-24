@@ -1,5 +1,4 @@
 import json
-import aiofiles
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from datetime import datetime, timezone

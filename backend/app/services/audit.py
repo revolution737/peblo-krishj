@@ -8,8 +8,8 @@ async def log_audit_event(
     user_id: uuid.UUID,
     action: str,
     target_type: str,
-    target_id: Optional[str] = None,
-    details: Optional[dict] = None
+    target_id: str | None = None,
+    details: dict | None = None
 ):
     """
     Helper function to log an audit event to the database.

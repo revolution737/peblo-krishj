@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from typing import List, Dict, Any
 
 from app.database import get_db
 from app.models.show import Show
@@ -14,7 +13,6 @@ from app.auth.dependencies import require_editor, require_admin
 from app.services.publish import publish_catalogue
 from app.services.audit import log_audit_event
 from app.storage.local import storage
-from sqlalchemy.orm import selectinload
 from fastapi import HTTPException
 import os
 import aiofiles
@@ -119,7 +117,7 @@ async def rollback_catalog(run_id: str, db: AsyncSession = Depends(get_db), user
     except Exception as e:
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
-        raise HTTPException(status_code=500, detail=f"Rollback failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Rollback failed: {e!s}")
         
     await log_audit_event(db, user_id=uuid.UUID(user["id"]), action="ROLLBACK", target_type="CATALOG", target_id=str(run.id))
     await db.commit()

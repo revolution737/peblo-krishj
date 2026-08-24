@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from typing import List, Optional
+from typing import Optional
 import uuid
 
 from app.database import get_db
@@ -13,13 +13,13 @@ from app.services.audit import log_audit_event
 
 router = APIRouter(prefix="/admin/episodes", tags=["admin/episodes"])
 
-@router.get("/", response_model=List[EpisodeResponse])
+@router.get("/", response_model=list[EpisodeResponse])
 async def list_episodes(
     skip: int = 0,
     limit: int = 100,
-    show_id: Optional[uuid.UUID] = None,
-    status: Optional[str] = None,
-    language: Optional[str] = None,
+    show_id: uuid.UUID | None = None,
+    status: str | None = None,
+    language: str | None = None,
     db: AsyncSession = Depends(get_db), 
     user: dict = Depends(require_editor)
 ):
@@ -37,8 +37,7 @@ async def list_episodes(
 
 @router.post("/", response_model=EpisodeResponse)
 async def create_episode(episode: EpisodeCreate, db: AsyncSession = Depends(get_db), user: dict = Depends(require_editor)):
-    if episode.status == "published":
-        if episode.duration_seconds is None:
+    if episode.status == "published" and episode.duration_seconds is None:
             raise HTTPException(status_code=400, detail="Episodes need a duration before they can be published.")
             
     db_episode = Episode(**episode.model_dump())

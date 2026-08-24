@@ -4,7 +4,7 @@ from sqlalchemy import select
 
 from app.database import get_db
 from app.models.user import User
-from app.schemas.auth import LoginRequest, Token
+from app.schemas.auth import Token
 from app.auth.passwords import verify_password
 from app.auth.jwt import create_access_token
 

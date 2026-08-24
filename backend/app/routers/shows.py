@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from typing import List, Optional
+from typing import Optional
 import uuid
 
 from app.database import get_db
@@ -12,12 +12,12 @@ from app.services.audit import log_audit_event
 
 router = APIRouter(prefix="/admin/shows", tags=["admin/shows"])
 
-@router.get("/", response_model=List[ShowResponse])
+@router.get("/", response_model=list[ShowResponse])
 async def list_shows(
     skip: int = 0,
     limit: int = 100,
-    section: Optional[str] = None,
-    status: Optional[str] = None,
+    section: str | None = None,
+    status: str | None = None,
     db: AsyncSession = Depends(get_db), 
     user: dict = Depends(require_editor)
 ):

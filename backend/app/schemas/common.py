@@ -1,17 +1,14 @@
-from pydantic import BaseModel
 from typing import List, Optional
 import uuid
 from datetime import datetime
-import json
-import os
-from pydantic import BaseModel, field_validator, ValidationInfo
+from pydantic import BaseModel, field_validator
 
 class ShowBase(BaseModel):
     title: str
     slug: str
-    section: Optional[str] = None
-    categories: List[str] = []
-    synopsis: Optional[str] = None
+    section: str | None = None
+    categories: list[str] = []
+    synopsis: str | None = None
     status: str
 
     @field_validator('status')
@@ -23,7 +20,7 @@ class ShowBase(BaseModel):
 
     @field_validator('section')
     @classmethod
-    def validate_section(cls, v: Optional[str]) -> Optional[str]:
+    def validate_section(cls, v: str | None) -> str | None:
         if v is None:
             return v
         allowed = {"featured", "series", "minisodes", "songs"}
@@ -66,7 +63,7 @@ class SeasonResponse(SeasonBase):
 class EpisodeBase(BaseModel):
     episode_number: int
     episode_title: str
-    duration_seconds: Optional[int] = None
+    duration_seconds: int | None = None
     language: str
     content_group: str
     status: str
@@ -81,7 +78,7 @@ class EpisodeBase(BaseModel):
 class EpisodeCreate(EpisodeBase):
     show_id: uuid.UUID
     season_id: uuid.UUID
-    original_episode_id: Optional[str] = None
+    original_episode_id: str | None = None
 
 class EpisodeUpdate(EpisodeBase):
     pass
@@ -90,7 +87,7 @@ class EpisodeResponse(EpisodeBase):
     id: uuid.UUID
     show_id: uuid.UUID
     season_id: uuid.UUID
-    original_episode_id: Optional[str] = None
+    original_episode_id: str | None = None
     created_at: datetime
     updated_at: datetime
 

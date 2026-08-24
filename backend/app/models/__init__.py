@@ -7,4 +7,4 @@ from app.models.artwork import Artwork
 from app.models.publish_run import PublishRun
 from app.models.audit_log import AuditLog
 
-__all__ = ["Base", "User", "Show", "Season", "Episode", "Artwork", "PublishRun", "AuditLog"]
+__all__ = ["Artwork", "AuditLog", "Base", "Episode", "PublishRun", "Season", "Show", "User"]

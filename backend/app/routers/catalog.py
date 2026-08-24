@@ -1,11 +1,9 @@
-from fastapi import APIRouter, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter
 from typing import Optional
 import json
 import os
 import aiofiles
 
-from app.database import get_db
 from app.schemas.catalog import CatalogResponse
 from app.storage.local import storage
 
@@ -35,10 +33,10 @@ async def get_catalog():
 
 @router.get("/search", response_model=CatalogResponse)
 async def search_catalog(
-    q: Optional[str] = None,
-    category: Optional[str] = None,
-    language: Optional[str] = None,
-    section: Optional[str] = None
+    q: str | None = None,
+    category: str | None = None,
+    language: str | None = None,
+    section: str | None = None
 ):
     # This is a naive in-memory search over the published catalogue.
     # We now cache the JSON in memory and filter it.

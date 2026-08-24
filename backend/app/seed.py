@@ -2,7 +2,6 @@ import asyncio
 import json
 from sqlalchemy import select
 import sys
-import uuid
 
 from app.database import AsyncSessionLocal
 from app.models.user import User

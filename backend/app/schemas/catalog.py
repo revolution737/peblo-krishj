@@ -1,7 +1,7 @@
 from pydantic import BaseModel
-from typing import List, Dict, Any, Optional
+from typing import Any, Optional
 
 class CatalogResponse(BaseModel):
-    published_at: Optional[str]
-    version: Optional[str]
-    sections: List[Dict[str, Any]]
+    published_at: str | None
+    version: str | None
+    sections: list[dict[str, Any]]

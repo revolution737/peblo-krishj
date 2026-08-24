@@ -33,7 +33,7 @@ docker compose up -d --build
 
 ### Part A: Database & Seeding Strategy
 **Decision:** I used PostgreSQL with SQLAlchemy async sessions. The seed script runs automatically on boot and handles the "imperfect" seed data gracefully.
-**Trade-offs:** I enforced a strict `UNIQUE(content_group, language)` constraint in the schema. This means that duplicate language variants in the seed data (e.g., the duplicate Hindi entry for `ep_9001`) are caught natively by the database throwing an `IntegrityError`. The seed script gracefully handles this and skips the duplicate row. This prioritizes strict database integrity over accepting bad seed data.
+**Trade-offs:** I enforced a strict `UNIQUE(content_group, language)` constraint in the schema. In `asyncio` SQLAlchemy, catching a database `IntegrityError` poisons the entire transaction, requiring complex nested savepoints to recover. To gracefully handle duplicate language variants in the seed data (e.g., the duplicate Hindi entry for `ep_9001`) without aborting the transaction, the seed script performs an in-memory deduplication check (`seen_content_keys`) before inserting rows. This guarantees database integrity while keeping the seed script robust.
 
 ### Part B: API & CMS Implementation
 **Decision:** Built a robust FastAPI backend and a React/Vite CMS with strict Role-Based Access Control (RBAC). The CMS includes a "Validation Report" endpoint to explicitly check for missing data (like missing artwork or missing show sections) before an Admin is permitted to publish. I used `@tanstack/react-query` in the CMS for robust data fetching and state synchronization.

@@ -87,13 +87,21 @@ async def seed_db():
         await session.commit()
         for s in seasons_cache.values():
             await session.refresh(s)
-            
+
+        # Deduplicate episodes in-memory before inserting, instead of relying
+        # on per-row savepoints to catch IntegrityError from the DB.
+        seen_content_keys: set[tuple[str, str]] = set()
+
         for row in seed_data:
             show = shows_cache[row["slug"]]
             season = seasons_cache[(row["slug"], row["season_number"])]
-            
-            from sqlalchemy.exc import IntegrityError
-            
+
+            content_key = (row["content_group"], row["language"])
+            if content_key in seen_content_keys:
+                print(f"Skipping duplicate episode for {row['content_group']} in {row['language']} (caught in-memory).")
+                continue
+            seen_content_keys.add(content_key)
+
             ep = Episode(
                 show_id=show.id,
                 season_id=season.id,
@@ -105,20 +113,21 @@ async def seed_db():
                 status="published" if row["status"] == "published" else "draft",
                 original_episode_id=row["episode_id"]
             )
-            
-            try:
-                # Catch the IntegrityError natively via a nested transaction (SAVEPOINT)
-                async with session.begin_nested():
-                    session.add(ep)
-                    await session.flush()
-            except IntegrityError:
-                print(f"Skipping duplicate episode for {row['content_group']} in {row['language']} (caught IntegrityError natively).")
+            session.add(ep)
+
+        await session.commit()
+
+        # Refresh episodes so we can attach artwork
+        # Re-query all episodes to get their IDs
+        ep_result = await session.execute(select(Episode))
+        all_episodes = {ep.original_episode_id: ep for ep in ep_result.scalars().all()}
+
+        for row in seed_data:
+            content_key = (row["content_group"], row["language"])
+            ep = all_episodes.get(row["episode_id"])
+            if not ep:
                 continue
-                
-            await session.commit()
-            await session.refresh(ep)
-            
-            # Add placeholder artwork records
+
             artworks = row.get("artwork_available", [])
             for art_type in artworks:
                 art = Artwork(
@@ -130,7 +139,7 @@ async def seed_db():
                     file_size_bytes=1024
                 )
                 session.add(art)
-                
+
         await session.commit()
         print("Seed complete.")
 

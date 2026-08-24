@@ -5,43 +5,33 @@ Tests for the publish pipeline:
   - languages list is sorted deterministically
   - unpublished episodes are excluded
   - shows without a section are skipped
+
+These tests use lightweight dataclass-style objects with relationship attributes
+pre-populated, mirroring how SQLAlchemy's selectinload delivers them.  This
+decouples the tests from query ordering (no more fragile call-count mocking).
 """
 import pytest
-import pytest_asyncio
-import os
 import json
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
-from datetime import datetime, timezone
 
 from app.services.publish import publish_catalogue
-from app.models.publish_run import PublishRun
 
 
 # ──────────────────────────────────────────────
 # Helpers — build lightweight fake ORM objects
+# with relationship attributes pre-populated.
 # ──────────────────────────────────────────────
 
-def _show(title="Test Show", slug="test-show", section="series", status="published"):
-    s = MagicMock()
-    s.id = uuid.uuid4()
-    s.title = title
-    s.slug = slug
-    s.section = section
-    s.synopsis = "A test show."
-    s.categories = ["adventure"]
-    s.status = status
-    return s
+def _artwork(artwork_type="poster", storage_path="artwork/seed/dummy.jpg"):
+    a = MagicMock()
+    a.artwork_type = artwork_type
+    a.storage_path = storage_path
+    return a
 
-def _season(show_id, number=1):
-    s = MagicMock()
-    s.id = uuid.uuid4()
-    s.show_id = show_id
-    s.season_number = number
-    return s
 
 def _episode(show_id, season_id, number=1, title="Ep Title", language="en",
-             content_group="cg-1", status="published", duration=300):
+             content_group="cg-1", status="published", duration=300, artwork=None):
     e = MagicMock()
     e.id = uuid.uuid4()
     e.show_id = show_id
@@ -52,70 +42,52 @@ def _episode(show_id, season_id, number=1, title="Ep Title", language="en",
     e.content_group = content_group
     e.status = status
     e.duration_seconds = duration
+    e.artwork_items = artwork or []
     return e
 
 
-def _make_db(shows, seasons_by_show, episodes_by_season, artwork_by_ep=None, artwork_by_show=None):
-    """Return an AsyncSession mock wired to return the given data."""
-    artwork_by_ep = artwork_by_ep or {}
-    artwork_by_show = artwork_by_show or {}
+def _season(show_id, number=1, episodes=None):
+    s = MagicMock()
+    s.id = uuid.uuid4()
+    s.show_id = show_id
+    s.season_number = number
+    s.episodes = episodes or []
+    return s
 
-    async def fake_execute(stmt):
-        result = MagicMock()
-        # We can't inspect the SQL easily, so we patch at call-site level instead.
-        # Each test patches individual calls. This stub is intentionally minimal.
-        result.scalars.return_value.all.return_value = []
-        result.scalar_one_or_none.return_value = None
-        return result
+
+def _show(title="Test Show", slug="test-show", section="series",
+          status="published", seasons=None, artwork=None):
+    s = MagicMock()
+    s.id = uuid.uuid4()
+    s.title = title
+    s.slug = slug
+    s.section = section
+    s.synopsis = "A test show."
+    s.categories = ["adventure"]
+    s.status = status
+    s.seasons = seasons or []
+    s.artwork = artwork or []
+    return s
+
+
+def _make_db(shows):
+    """Return an AsyncSession mock that returns the given shows list on
+    the single selectinload query issued by publish_catalogue."""
+    result_mock = MagicMock()
+    scalars_mock = MagicMock()
+    scalars_mock.unique.return_value.all.return_value = shows
+    result_mock.scalars.return_value = scalars_mock
 
     db = MagicMock()
     db.add = MagicMock()
     db.commit = AsyncMock()
     db.refresh = AsyncMock()
-    db.execute = AsyncMock(side_effect=fake_execute)
+    db.execute = AsyncMock(return_value=result_mock)
     return db
 
 
-# ──────────────────────────────────────────────
-# Unit tests using patched storage + DB
-# ──────────────────────────────────────────────
-
-@pytest.mark.asyncio
-async def test_content_group_collapsing():
-    """Two episodes sharing a content_group but different languages collapse into
-    one catalogue entry with both languages in a sorted list."""
-    show = _show()
-    season = _season(show.id)
-    ep_en = _episode(show.id, season.id, language="en", content_group="cg-1")
-    ep_hi = _episode(show.id, season.id, language="hi", content_group="cg-1")
-
-    call_count = [0]
-
-    async def fake_execute(stmt):
-        result = MagicMock()
-        c = call_count[0]
-        call_count[0] += 1
-
-        if c == 0:  # published shows query
-            result.scalars.return_value.all.return_value = [show]
-        elif c == 1:  # show artwork
-            result.scalars.return_value.all.return_value = []
-        elif c == 2:  # seasons
-            result.scalars.return_value.all.return_value = [season]
-        elif c == 3:  # published episodes for season
-            result.scalars.return_value.all.return_value = [ep_en, ep_hi]
-        elif c == 4:  # artwork for ep_en (representative)
-            result.scalars.return_value.all.return_value = []
-        else:
-            result.scalars.return_value.all.return_value = []
-        return result
-
-    db = MagicMock()
-    db.add = MagicMock()
-    db.commit = AsyncMock()
-    db.refresh = AsyncMock()
-    db.execute = AsyncMock(side_effect=fake_execute)
-
+def _patch_storage():
+    """Return a context manager that patches the storage backend."""
     written_texts = {}
 
     async def fake_save_text(path, text):
@@ -128,12 +100,34 @@ async def test_content_group_collapsing():
     async def fake_atomic_replace(src, dst):
         written_texts[dst] = written_texts.get(src, "")
 
-    with patch("app.services.publish.storage") as mock_storage:
-        mock_storage.get_url = AsyncMock(return_value="/storage/dummy.jpg")
-        mock_storage.save_text = AsyncMock(side_effect=fake_save_text)
-        mock_storage.copy = AsyncMock(side_effect=fake_copy)
-        mock_storage.atomic_replace = AsyncMock(side_effect=fake_atomic_replace)
+    mock_storage = MagicMock()
+    mock_storage.get_url = AsyncMock(return_value="/storage/dummy.jpg")
+    mock_storage.save_text = AsyncMock(side_effect=fake_save_text)
+    mock_storage.copy = AsyncMock(side_effect=fake_copy)
+    mock_storage.atomic_replace = AsyncMock(side_effect=fake_atomic_replace)
 
+    return patch("app.services.publish.storage", mock_storage), written_texts
+
+
+# ──────────────────────────────────────────────
+# Unit tests
+# ──────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_content_group_collapsing():
+    """Two episodes sharing a content_group but different languages collapse into
+    one catalogue entry with both languages in a sorted list."""
+    show = _show()
+    season = _season(show.id)
+    ep_en = _episode(show.id, season.id, language="en", content_group="cg-1")
+    ep_hi = _episode(show.id, season.id, language="hi", content_group="cg-1")
+    season.episodes = [ep_en, ep_hi]
+    show.seasons = [season]
+
+    db = _make_db([show])
+    storage_patch, written_texts = _patch_storage()
+
+    with storage_patch:
         run = await publish_catalogue(db, uuid.uuid4())
 
     assert run.status == "success"
@@ -142,7 +136,7 @@ async def test_content_group_collapsing():
     catalogue = json.loads(written_texts.get("catalogue.json", "{}"))
     episodes = catalogue["sections"][0]["shows"][0]["seasons"][0]["episodes"]
     assert len(episodes) == 1
-    assert sorted(["en", "hi"]) == episodes[0]["languages"]
+    assert episodes[0]["languages"] == ["en", "hi"]
 
 
 @pytest.mark.asyncio
@@ -151,37 +145,13 @@ async def test_season_0_marked_as_trailer():
     show = _show()
     season0 = _season(show.id, number=0)
     trailer_ep = _episode(show.id, season0.id, title="Trailer", content_group="cg-trailer")
+    season0.episodes = [trailer_ep]
+    show.seasons = [season0]
 
-    call_count = [0]
+    db = _make_db([show])
+    storage_patch, written_texts = _patch_storage()
 
-    async def fake_execute(stmt):
-        result = MagicMock()
-        c = call_count[0]
-        call_count[0] += 1
-        mapping = [
-            [show],             # 0: published shows
-            [],                 # 1: show artwork
-            [season0],          # 2: seasons
-            [trailer_ep],       # 3: episodes for season 0
-            [],                 # 4: trailer ep artwork
-        ]
-        result.scalars.return_value.all.return_value = mapping[c] if c < len(mapping) else []
-        return result
-
-    db = MagicMock()
-    db.add = MagicMock()
-    db.commit = AsyncMock()
-    db.refresh = AsyncMock()
-    db.execute = AsyncMock(side_effect=fake_execute)
-
-    written_texts = {}
-
-    with patch("app.services.publish.storage") as mock_storage:
-        mock_storage.get_url = AsyncMock(return_value="/storage/dummy.jpg")
-        mock_storage.save_text = AsyncMock(side_effect=lambda p, t: written_texts.update({p: t}) or p)
-        mock_storage.copy = AsyncMock(side_effect=lambda src, dst: written_texts.update({dst: written_texts.get(src, "")}))
-        mock_storage.atomic_replace = AsyncMock(side_effect=lambda src, dst: written_texts.update({dst: written_texts.get(src, "")}))
-
+    with storage_patch:
         run = await publish_catalogue(db, uuid.uuid4())
 
     assert run.status == "success"
@@ -197,36 +167,18 @@ async def test_unpublished_episodes_excluded():
     show = _show()
     season = _season(show.id)
     draft_ep = _episode(show.id, season.id, status="draft", content_group="cg-draft")
+    season.episodes = [draft_ep]
+    show.seasons = [season]
 
-    call_count = [0]
+    db = _make_db([show])
+    storage_patch, written_texts = _patch_storage()
 
-    async def fake_execute(stmt):
-        result = MagicMock()
-        c = call_count[0]
-        call_count[0] += 1
-        mapping = [[show], [], [season], []]  # empty episodes list (draft filtered by DB)
-        result.scalars.return_value.all.return_value = mapping[c] if c < len(mapping) else []
-        return result
-
-    db = MagicMock()
-    db.add = MagicMock()
-    db.commit = AsyncMock()
-    db.refresh = AsyncMock()
-    db.execute = AsyncMock(side_effect=fake_execute)
-
-    written_texts = {}
-
-    with patch("app.services.publish.storage") as mock_storage:
-        mock_storage.get_url = AsyncMock(return_value="")
-        mock_storage.save_text = AsyncMock(side_effect=lambda p, t: written_texts.update({p: t}) or p)
-        mock_storage.copy = AsyncMock(side_effect=lambda src, dst: written_texts.update({dst: written_texts.get(src, "")}))
-        mock_storage.atomic_replace = AsyncMock(side_effect=lambda src, dst: written_texts.update({dst: written_texts.get(src, "")}))
-
+    with storage_patch:
         run = await publish_catalogue(db, uuid.uuid4())
 
     assert run.episode_count == 0
     catalogue = json.loads(written_texts.get("catalogue.json", "{}"))
-    # Show with no episodes should not have seasons in the output
+    # Show with no published episodes → no seasons in output
     sections = catalogue.get("sections", [])
     if sections:
         shows = sections[0].get("shows", [])
@@ -242,37 +194,13 @@ async def test_show_without_section_skipped():
     show_ok = _show(title="Good Show", slug="good-show", section="series")
     season = _season(show_ok.id)
     ep = _episode(show_ok.id, season.id, content_group="cg-ok")
+    season.episodes = [ep]
+    show_ok.seasons = [season]
 
-    call_count = [0]
+    db = _make_db([show_no_section, show_ok])
+    storage_patch, written_texts = _patch_storage()
 
-    async def fake_execute(stmt):
-        result = MagicMock()
-        c = call_count[0]
-        call_count[0] += 1
-        mapping = [
-            [show_no_section, show_ok],# 0: published shows
-            [],                        # 1: show_ok artwork
-            [season],                  # 2: seasons for show_ok
-            [ep],                      # 3: episodes
-            [],                        # 4: ep artwork
-        ]
-        result.scalars.return_value.all.return_value = mapping[c] if c < len(mapping) else []
-        return result
-
-    db = MagicMock()
-    db.add = MagicMock()
-    db.commit = AsyncMock()
-    db.refresh = AsyncMock()
-    db.execute = AsyncMock(side_effect=fake_execute)
-
-    written_texts = {}
-
-    with patch("app.services.publish.storage") as mock_storage:
-        mock_storage.get_url = AsyncMock(return_value="")
-        mock_storage.save_text = AsyncMock(side_effect=lambda p, t: written_texts.update({p: t}) or p)
-        mock_storage.copy = AsyncMock(side_effect=lambda src, dst: written_texts.update({dst: written_texts.get(src, "")}))
-        mock_storage.atomic_replace = AsyncMock(side_effect=lambda src, dst: written_texts.update({dst: written_texts.get(src, "")}))
-
+    with storage_patch:
         run = await publish_catalogue(db, uuid.uuid4())
 
     assert run.show_count == 1  # only the good show
@@ -287,34 +215,16 @@ async def test_languages_sorted_deterministically():
     """Languages in a collapsed content_group entry must always be sorted."""
     show = _show()
     season = _season(show.id)
+    # Hindi first — deterministic sort should still produce ["en", "hi"]
     ep_hi = _episode(show.id, season.id, language="hi", content_group="cg-lang", number=1)
     ep_en = _episode(show.id, season.id, language="en", content_group="cg-lang", number=1)
+    season.episodes = [ep_hi, ep_en]
+    show.seasons = [season]
 
-    call_count = [0]
+    db = _make_db([show])
+    storage_patch, written_texts = _patch_storage()
 
-    async def fake_execute(stmt):
-        result = MagicMock()
-        c = call_count[0]
-        call_count[0] += 1
-        # Hindi first — deterministic sort should still produce ["en", "hi"]
-        mapping = [[show], [], [season], [ep_hi, ep_en], []]
-        result.scalars.return_value.all.return_value = mapping[c] if c < len(mapping) else []
-        return result
-
-    db = MagicMock()
-    db.add = MagicMock()
-    db.commit = AsyncMock()
-    db.refresh = AsyncMock()
-    db.execute = AsyncMock(side_effect=fake_execute)
-
-    written_texts = {}
-
-    with patch("app.services.publish.storage") as mock_storage:
-        mock_storage.get_url = AsyncMock(return_value="")
-        mock_storage.save_text = AsyncMock(side_effect=lambda p, t: written_texts.update({p: t}) or p)
-        mock_storage.copy = AsyncMock(side_effect=lambda src, dst: written_texts.update({dst: written_texts.get(src, "")}))
-        mock_storage.atomic_replace = AsyncMock(side_effect=lambda src, dst: written_texts.update({dst: written_texts.get(src, "")}))
-
+    with storage_patch:
         await publish_catalogue(db, uuid.uuid4())
 
     catalogue = json.loads(written_texts.get("catalogue.json", "{}"))

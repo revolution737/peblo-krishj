@@ -1,5 +1,6 @@
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, UniqueConstraint, CheckConstraint
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import relationship
 import uuid
 from datetime import datetime, timezone
 from app.models.base import Base
@@ -18,6 +19,9 @@ class Artwork(Base):
     file_size_bytes = Column(Integer, nullable=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    show = relationship("Show", back_populates="artwork")
+    episode = relationship("Episode", back_populates="artwork_items")
 
     __table_args__ = (
         UniqueConstraint("show_id", "artwork_type", name="uq_artwork_show_type"),

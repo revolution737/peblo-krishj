@@ -62,12 +62,6 @@ const Home: React.FC = () => {
   const getArtwork = (item: any, type: string) => {
     const artworkPath = item?.artwork?.[type];
     if (artworkPath) return `http://localhost:8000${artworkPath}`;
-    
-    if (type === 'thumbnail') return '';
-    
-    const seed = (item?.title || 'show').length;
-    if (type === 'banner') return `https://picsum.photos/seed/${seed}banner/1280/720`;
-    if (type === 'poster') return `https://picsum.photos/seed/${seed}poster/600/900`;
     return '';
   };
 
@@ -174,7 +168,7 @@ const Home: React.FC = () => {
         ) : (
           sections.map((section: any, idx: number) => (
             <div key={idx} className="row">
-              <h2 className="row-title">{section.name || section.section || section.id || 'Featured'}</h2>
+              <h2 className="row-title">{section.name}</h2>
               <div className="row-posters">
                 {(section.shows || []).map((show: any) => (
                   <img 
@@ -227,7 +221,7 @@ const Home: React.FC = () => {
               </h3>
               
               {(selectedShow.seasons || [])
-                .filter((s: any) => s.season_number !== 0) // DOMAIN RULE 1: STRICTLY FILTER SEASON 0 (TRAILERS)
+                .filter((s: any) => s.season_number !== 0) // Trailers (Season 0) are not shown as regular seasons
                 .sort((a: any, b: any) => a.season_number - b.season_number)
                 .map((season: any) => (
                 <div key={season.season_number} style={{ marginBottom: '2rem' }}>

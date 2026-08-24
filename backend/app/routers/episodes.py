@@ -8,6 +8,7 @@ from app.models.episode import Episode
 from app.models.artwork import Artwork
 from app.schemas.common import EpisodeCreate, EpisodeUpdate, EpisodeResponse
 from app.auth.dependencies import require_editor
+from app.services.validation import validate_episode_publishable
 from app.services.audit import log_audit_event
 
 router = APIRouter(prefix="/admin/episodes", tags=["admin/episodes"])
@@ -69,20 +70,13 @@ async def update_episode(episode_id: uuid.UUID, episode_update: EpisodeUpdate, d
     if not db_episode:
         raise HTTPException(status_code=404, detail="Episode not found")
         
-    if episode_update.status == "published":
-        if episode_update.duration_seconds is None:
-            raise HTTPException(status_code=400, detail="Episodes need a duration before they can be published.")
-        
-        # Check artwork
-        artwork_res = await db.execute(select(Artwork).where(Artwork.episode_id == episode_id))
-        artworks = artwork_res.scalars().all()
-        types = [a.artwork_type for a in artworks]
-        missing = [t for t in ['poster', 'banner', 'thumbnail'] if t not in types]
-        if missing:
-            raise HTTPException(status_code=400, detail=f"This episode is missing artwork: {', '.join(missing)}. Upload them before publishing.")
-
     for key, value in episode_update.model_dump().items():
         setattr(db_episode, key, value)
+        
+    if episode_update.status == "published":
+        errors = await validate_episode_publishable(db, db_episode)
+        if errors:
+            raise HTTPException(status_code=400, detail=errors[0])
         
     try:
         await log_audit_event(db, user_id=uuid.UUID(user["id"]), action="UPDATE", target_type="EPISODE", target_id=str(db_episode.id), details={"title": db_episode.episode_title})

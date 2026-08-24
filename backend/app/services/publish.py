@@ -1,6 +1,7 @@
 import json
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from datetime import datetime, timezone
 import uuid
 
@@ -22,9 +23,21 @@ async def publish_catalogue(db: AsyncSession, user_id: uuid.UUID) -> PublishRun:
     await db.refresh(run)
 
     try:
-        # 2. Query all published shows
-        shows_res = await db.execute(select(Show).where(Show.status == "published").order_by(Show.title))
-        shows = shows_res.scalars().all()
+        # 2. Eagerly load the full published hierarchy in a fixed number of queries
+        #    instead of issuing per-entity queries inside nested loops (N+1 fix).
+        stmt = (
+            select(Show)
+            .where(Show.status == "published")
+            .options(
+                selectinload(Show.seasons)
+                .selectinload(Season.episodes)
+                .selectinload(Episode.artwork_items),
+                selectinload(Show.artwork),
+            )
+            .order_by(Show.title)
+        )
+        result = await db.execute(stmt)
+        shows = result.scalars().unique().all()
 
         sections_dict = {
             "featured": [],
@@ -32,7 +45,7 @@ async def publish_catalogue(db: AsyncSession, user_id: uuid.UUID) -> PublishRun:
             "minisodes": [],
             "songs": []
         }
-        
+
         show_count = 0
         episode_count = 0
 
@@ -50,35 +63,26 @@ async def publish_catalogue(db: AsyncSession, user_id: uuid.UUID) -> PublishRun:
                 "artwork": {},
                 "seasons": []
             }
-            
-            # Fetch show-level artwork
-            art_res = await db.execute(select(Artwork).where(Artwork.show_id == show.id))
-            for art in art_res.scalars().all():
+
+            # Show-level artwork from the eagerly-loaded relationship
+            for art in show.artwork:
                 show_data["artwork"][art.artwork_type] = await storage.get_url(art.storage_path)
-                
-            # Fetch seasons ordered deterministically
-            season_res = await db.execute(select(Season).where(Season.show_id == show.id).order_by(Season.season_number))
-            seasons = season_res.scalars().all()
-            
-            for season in seasons:
+
+            # Seasons are already ordered by season_number via the relationship
+            for season in show.seasons:
                 season_data = {
                     "season_number": season.season_number,
                     "is_trailer_season": season.season_number == 0,
                     "episodes": []
                 }
-                
-                # Fetch published episodes for this season
-                ep_res = await db.execute(
-                    select(Episode)
-                    .where(Episode.season_id == season.id, Episode.status == "published")
-                    .order_by(Episode.episode_number)
-                )
-                episodes = ep_res.scalars().all()
-                
+
+                # Filter to published episodes only (from the eagerly-loaded list)
+                published_episodes = [ep for ep in season.episodes if ep.status == "published"]
+
                 # Content Group Collapsing — episodes sharing a content_group are
                 # language variants of the same episode; collapse into one entry.
                 collapsed_episodes: dict = {}
-                for ep in episodes:
+                for ep in published_episodes:
                     cg = ep.content_group
                     if cg not in collapsed_episodes:
                         collapsed_episodes[cg] = {
@@ -89,22 +93,21 @@ async def publish_catalogue(db: AsyncSession, user_id: uuid.UUID) -> PublishRun:
                             "duration_seconds": ep.duration_seconds,
                             "artwork": {}
                         }
-                        # Fetch artwork for the representative episode
-                        ep_art_res = await db.execute(select(Artwork).where(Artwork.episode_id == ep.id))
-                        for art in ep_art_res.scalars().all():
+                        # Artwork from eagerly-loaded relationship
+                        for art in ep.artwork_items:
                             collapsed_episodes[cg]["artwork"][art.artwork_type] = await storage.get_url(art.storage_path)
                     else:
                         collapsed_episodes[cg]["languages"].append(ep.language)
-                        
-                # Sort languages deterministically
+
+                # Sort languages deterministically and build the episode list
                 for cg_data in collapsed_episodes.values():
                     cg_data["languages"].sort()
                     season_data["episodes"].append(cg_data)
                     episode_count += 1
-                    
+
                 if season_data["episodes"]:
                     show_data["seasons"].append(season_data)
-                    
+
             if show.section in sections_dict:
                 sections_dict[show.section].append(show_data)
 
@@ -114,13 +117,13 @@ async def publish_catalogue(db: AsyncSession, user_id: uuid.UUID) -> PublishRun:
             for sec_id, sec_shows in sections_dict.items()
             if sec_shows
         ]
-                
+
         catalogue_data = {
             "published_at": datetime.now(timezone.utc).isoformat(),
             "version": str(run.id),
             "sections": sections_list
         }
-        
+
         # === Atomic Write via StorageBackend abstraction ===
         # Write JSON to a tmp path through the backend interface, then:
         #   1. copy tmp -> versioned historical file  (for rollback)
@@ -134,18 +137,18 @@ async def publish_catalogue(db: AsyncSession, user_id: uuid.UUID) -> PublishRun:
         await storage.copy(tmp_rel, final_rel)
         await storage.atomic_replace(tmp_rel, live_rel)
         # ===================================================
-        
+
         # Update run record
         run.status = "success"
         run.completed_at = datetime.now(timezone.utc)
         run.show_count = show_count
         run.episode_count = episode_count
         run.catalogue_path = final_rel
-        
+
     except Exception as e:
         run.status = "failed"
         run.error_message = str(e)
         run.completed_at = datetime.now(timezone.utc)
-        
+
     await db.commit()
     return run

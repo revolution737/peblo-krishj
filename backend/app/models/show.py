@@ -1,5 +1,6 @@
 from sqlalchemy import Column, String, DateTime, Index
 from sqlalchemy.dialects.postgresql import UUID, ARRAY
+from sqlalchemy.orm import relationship
 import uuid
 from datetime import datetime, timezone
 from app.models.base import Base
@@ -16,6 +17,9 @@ class Show(Base):
     status = Column(String(20), nullable=False) # 'draft' or 'published'
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    seasons = relationship("Season", back_populates="show", order_by="Season.season_number")
+    artwork = relationship("Artwork", back_populates="show")
 
 # Index for publish job to efficiently grab published shows by section
 Index("idx_shows_section", Show.section, postgresql_where=(Show.status == 'published'))

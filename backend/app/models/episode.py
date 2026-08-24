@@ -1,5 +1,6 @@
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import relationship
 import uuid
 from datetime import datetime, timezone
 from app.models.base import Base
@@ -19,6 +20,9 @@ class Episode(Base):
     original_episode_id = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    season = relationship("Season", back_populates="episodes")
+    artwork_items = relationship("Artwork", back_populates="episode")
 
     __table_args__ = (
         UniqueConstraint("content_group", "language", name="uq_content_group_language"),
